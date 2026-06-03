@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+:root {
+  --color-bg: #F9F6F0;
+  --color-surface: #FFFFFF;
+  --color-primary: #1B4332;
+  --color-primary-light: #2D6A4F;
+  --color-accent: #B8972A;
+  --color-accent-light: #D4AC45;
+  --color-text: #1A1A1A;
+  --color-muted: #6B7280;
+  --color-border: #E5E0D8;
+  --color-danger: #DC2626;
+  --color-success: #16A34A;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'DM Sans', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Cormorant Garamond', serif;
+}
+
+.display-font {
+  font-family: 'Cormorant Garamond', serif;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
+
+.score-cell { transition: background 0.15s; }
+.score-cell:hover { background: rgba(27, 67, 50, 0.06); }
+.score-cell.editing { background: rgba(27, 67, 50, 0.1); }
+
+.nav-item { transition: all 0.15s; }
+.nav-item-active {
+  background: rgba(184, 151, 42, 0.12);
+  color: var(--color-accent);
+  border-right: 3px solid var(--color-accent);
+}
+.nav-item:hover:not(.nav-item-active) { background: rgba(27, 67, 50, 0.08); }
+
+#root {
+  width: 100%;
+  margin: 0;
+  text-align: left;
+}
