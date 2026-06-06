@@ -1,12 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, Trophy, DollarSign, Users } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Trophy, Users2, CalendarDays } from 'lucide-react';
 
 const NAV_ITEMS = [
   { path: '/',            icon: LayoutDashboard, label: 'Home' },
   { path: '/scorecard',   icon: ClipboardList,   label: 'Score' },
   { path: '/leaderboard', icon: Trophy,           label: 'Board' },
-  { path: '/skins',       icon: DollarSign,       label: 'Skins' },
-  { path: '/members',     icon: Users,            label: 'Members' },
+  { path: '/teams',       icon: Users2,           label: 'Teams' },
+  { path: '/schedule',    icon: CalendarDays,     label: 'Schedule' },
 ];
 
 export function MobileNav() {
