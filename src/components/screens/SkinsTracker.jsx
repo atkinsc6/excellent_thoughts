@@ -7,8 +7,9 @@ import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { seasonSkinsTotals, skinsSummary } from '../../utils/skins';
 
-export function SkinsTracker({ players, rounds, courses, league }) {
+export function SkinsTracker({ players, rounds, courses, league, teams = [] }) {
   const [skinsType, setSkinsType] = useState('gross'); // 'gross' | 'net'
+  const [tab, setTab] = useState('individual'); // 'individual' | 'teams'
 
   const sortedRounds = useMemo(() => [...rounds].sort((a, b) => new Date(b.date) - new Date(a.date)), [rounds]);
 
@@ -48,27 +49,105 @@ export function SkinsTracker({ players, rounds, courses, league }) {
     payout: st.skins * potPerSkin,
   }));
 
+  const teamSkinsTotals = useMemo(() => {
+    if (!teams.length) return [];
+    return teams.map(team => {
+      let total = 0;
+      rounds.forEach(r => {
+        (r.skinsResults || []).forEach(sr => {
+          if (sr.winnerId && team.playerIds.includes(sr.winnerId)) total += sr.pot;
+        });
+      });
+      const roundBreakdown = rounds.map(r => {
+        let roundTotal = 0;
+        (r.skinsResults || []).forEach(sr => {
+          if (sr.winnerId && team.playerIds.includes(sr.winnerId)) roundTotal += sr.pot;
+        });
+        return { roundId: r.id, date: r.date, skins: roundTotal };
+      }).filter(rb => rb.skins > 0);
+      return { ...team, totalSkins: total, payout: total * potPerSkin, roundBreakdown };
+    }).sort((a, b) => b.totalSkins - a.totalSkins);
+  }, [teams, rounds, potPerSkin]);
+
   return (
     <div className="flex-1 overflow-y-auto pb-20 lg:pb-6" style={{ backgroundColor: 'var(--color-bg)' }}>
       <TopBar title="Skins Tracker" subtitle="Weekly skins results and season totals">
-        <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-          {['gross', 'net'].map(v => (
-            <button
-              key={v}
-              onClick={() => setSkinsType(v)}
-              className="px-4 py-1.5 text-sm font-medium capitalize transition-all"
-              style={{
-                backgroundColor: skinsType === v ? 'var(--color-primary)' : 'var(--color-surface)',
-                color: skinsType === v ? 'white' : 'var(--color-muted)',
-              }}
-            >
-              {v} Skins
-            </button>
-          ))}
+        <div className="flex gap-2 flex-wrap">
+          <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+            {[['individual','Individual'],['teams','Teams']].map(([v, label]) => (
+              <button key={v} onClick={() => setTab(v)}
+                className="px-3 py-1.5 text-sm font-medium transition-all"
+                style={{ backgroundColor: tab === v ? 'var(--color-primary)' : 'var(--color-surface)', color: tab === v ? 'white' : 'var(--color-muted)' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+            {['gross', 'net'].map(v => (
+              <button
+                key={v}
+                onClick={() => setSkinsType(v)}
+                className="px-4 py-1.5 text-sm font-medium capitalize transition-all"
+                style={{
+                  backgroundColor: skinsType === v ? 'var(--color-accent)' : 'var(--color-surface)',
+                  color: skinsType === v ? 'white' : 'var(--color-muted)',
+                }}
+              >
+                {v} Skins
+              </button>
+            ))}
+          </div>
         </div>
       </TopBar>
 
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        {/* Team Skins Tab */}
+        {tab === 'teams' && (
+          <div className="space-y-4">
+            {teamSkinsTotals.length === 0 ? (
+              <Card><p className="py-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>No teams configured. Set up teams first.</p></Card>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {teamSkinsTotals.map((team, i) => (
+                    <Card key={team.id} className={i === 0 ? 'border-2' : ''} style={i === 0 ? { borderColor: 'var(--color-accent)' } : {}}>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
+                          style={{ backgroundColor: team.color || 'var(--color-primary)', color: 'white' }}>
+                          {team.initials || team.name.slice(0, 2)}
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-semibold text-base" style={{ fontFamily: 'Cormorant Garamond, serif', color: 'var(--color-text)' }}>{team.name}</div>
+                          {i === 0 && <div className="text-xs font-medium" style={{ color: 'var(--color-accent)' }}>Skins Leader</div>}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-3xl font-bold" style={{ fontFamily: 'Cormorant Garamond, serif', color: 'var(--color-accent)' }}>{team.totalSkins}</div>
+                          <div className="text-xs" style={{ color: 'var(--color-muted)' }}>skins</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between p-2 rounded-lg" style={{ backgroundColor: 'var(--color-bg)' }}>
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Est. payout</span>
+                        <span className="font-bold text-sm" style={{ color: '#16A34A' }}>${team.payout}</span>
+                      </div>
+                      {team.roundBreakdown.length > 0 && (
+                        <div className="mt-3 space-y-1">
+                          {team.roundBreakdown.map(rb => (
+                            <div key={rb.roundId} className="flex items-center justify-between text-xs">
+                              <span style={{ color: 'var(--color-muted)' }}>{new Date(rb.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                              <span className="font-medium" style={{ color: 'var(--color-text)' }}>{rb.skins} skins</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {tab === 'individual' && <>
         {/* Summary cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
@@ -207,6 +286,7 @@ export function SkinsTracker({ players, rounds, courses, league }) {
             })}
           </div>
         </div>
+        </>}
       </div>
     </div>
   );

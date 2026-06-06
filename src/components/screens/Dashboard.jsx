@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Trophy, TrendingDown, DollarSign, Target, CalendarDays, Medal } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Trophy, TrendingDown, DollarSign, Target, CalendarDays, Medal, Users2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { useHandicap } from '../../hooks/useHandicap';
@@ -9,7 +9,13 @@ import { seasonSkinsTotals } from '../../utils/skins';
 
 const PLAYER_COLORS = ['#1B4332','#B8972A','#2D6A4F','#DC2626','#7C3AED','#0284C7','#D97706','#059669'];
 
-export function Dashboard({ league, players, rounds, courses }) {
+const ACTIVITY_ICONS = {
+  round_finalized: '🏌️', skin_recorded: '💰', ctp_recorded: '🎯',
+  member_joined: '👤', handicap_updated: '📊', round_unlocked: '🔓',
+  settings_updated: '⚙️', team_created: '👥', league_created: '🏆',
+};
+
+export function Dashboard({ league, players, rounds, courses, teams = [], activity = [] }) {
   const { getDifferentials, getHandicapTrend } = useHandicap(players, rounds, courses);
 
   const stats = useMemo(() => {
@@ -110,6 +116,40 @@ export function Dashboard({ league, players, rounds, courses }) {
     });
     return Object.values(allPoints).sort((a, b) => a.date.localeCompare(b.date));
   }, [players, getHandicapTrend]);
+
+  // Team standings
+  const teamStandings = useMemo(() => {
+    if (!teams.length) return [];
+    return teams.map(team => {
+      let wins = 0, losses = 0, ties = 0, totalNet = 0, roundCount = 0;
+      rounds.forEach(r => {
+        const teamScores = team.playerIds
+          .map(pid => r.scores?.find(s => s.playerId === pid))
+          .filter(Boolean);
+        if (!teamScores.length) return;
+        const teamBest = Math.min(...teamScores.map(s => s.totalNet));
+        totalNet += teamBest;
+        roundCount++;
+        const otherTeams = teams.filter(t => t.id !== team.id);
+        otherTeams.forEach(opp => {
+          const oppScores = opp.playerIds
+            .map(pid => r.scores?.find(s => s.playerId === pid))
+            .filter(Boolean);
+          if (!oppScores.length) return;
+          const oppBest = Math.min(...oppScores.map(s => s.totalNet));
+          if (teamBest < oppBest) wins++;
+          else if (teamBest > oppBest) losses++;
+          else ties++;
+        });
+      });
+      return {
+        ...team,
+        wins, losses, ties,
+        avgNet: roundCount ? Math.round(totalNet / roundCount * 10) / 10 : 0,
+        roundCount,
+      };
+    }).sort((a, b) => b.wins - a.wins || a.avgNet - b.avgNet);
+  }, [teams, rounds]);
 
   // Upcoming event
   const today = new Date();
@@ -262,56 +302,127 @@ export function Dashboard({ league, players, rounds, courses }) {
           </Card>
         </div>
 
-        {/* Standings Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Season Standings</CardTitle>
-          </CardHeader>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-                  {['Rank', 'Player', 'Rounds', 'Avg Gross', 'Avg Net', 'Points', 'Skins'].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {standings.map((row, i) => (
-                  <tr key={row.id} style={{ borderBottom: '1px solid var(--color-border)' }} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-3 py-2.5">
-                      <span className="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold"
-                        style={{
-                          backgroundColor: i < 3 ? 'rgba(184,151,42,0.15)' : 'transparent',
-                          color: i < 3 ? 'var(--color-accent)' : 'var(--color-muted)',
-                        }}>
-                        {i + 1}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                          style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>
-                          {row.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                        </div>
-                        <span className="font-medium" style={{ color: 'var(--color-text)' }}>{row.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-center" style={{ color: 'var(--color-muted)' }}>{row.rounds}</td>
-                    <td className="px-3 py-2.5 text-center" style={{ color: 'var(--color-text)' }}>{row.avgGross}</td>
-                    <td className="px-3 py-2.5 text-center font-medium" style={{ color: 'var(--color-primary)' }}>{row.avgNet}</td>
-                    <td className="px-3 py-2.5 text-center">
-                      <span className="font-bold" style={{ color: 'var(--color-accent)' }}>{row.points}</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-center" style={{ color: 'var(--color-muted)' }}>{row.skins}</td>
+        {/* Standings Table + Team Standings */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Season Standings</CardTitle>
+            </CardHeader>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                    {['Rank', 'Player', 'Rounds', 'Avg Gross', 'Avg Net', 'Points', 'Skins'].map(h => (
+                      <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {standings.map((row, i) => (
+                    <tr key={row.id} style={{ borderBottom: '1px solid var(--color-border)' }} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-3 py-2.5">
+                        <span className="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold"
+                          style={{
+                            backgroundColor: i < 3 ? 'rgba(184,151,42,0.15)' : 'transparent',
+                            color: i < 3 ? 'var(--color-accent)' : 'var(--color-muted)',
+                          }}>
+                          {i + 1}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                            style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>
+                            {row.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                          </div>
+                          <span className="font-medium" style={{ color: 'var(--color-text)' }}>{row.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-center" style={{ color: 'var(--color-muted)' }}>{row.rounds}</td>
+                      <td className="px-3 py-2.5 text-center" style={{ color: 'var(--color-text)' }}>{row.avgGross}</td>
+                      <td className="px-3 py-2.5 text-center font-medium" style={{ color: 'var(--color-primary)' }}>{row.avgNet}</td>
+                      <td className="px-3 py-2.5 text-center">
+                        <span className="font-bold" style={{ color: 'var(--color-accent)' }}>{row.points}</span>
+                      </td>
+                      <td className="px-3 py-2.5 text-center" style={{ color: 'var(--color-muted)' }}>{row.skins}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <div className="space-y-4">
+            {/* Team Standings */}
+            {teamStandings.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Users2 size={16} style={{ color: 'var(--color-primary)' }} />
+                    <CardTitle>Team Standings</CardTitle>
+                  </div>
+                </CardHeader>
+                <div className="space-y-3 mt-1">
+                  {teamStandings.map((team, i) => (
+                    <div key={team.id} className="p-3 rounded-lg" style={{ backgroundColor: i === 0 ? 'rgba(184,151,42,0.06)' : 'var(--color-bg)', border: `1px solid ${i === 0 ? 'var(--color-accent)' : 'var(--color-border)'}` }}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                          style={{ backgroundColor: team.color || 'var(--color-primary)', color: 'white' }}>
+                          {team.initials || team.name.slice(0, 2)}
+                        </div>
+                        <span className="font-semibold text-sm" style={{ color: 'var(--color-text)', fontFamily: 'Cormorant Garamond, serif', fontSize: '15px' }}>{team.name}</span>
+                        {i === 0 && <Badge variant="accent">Leader</Badge>}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <div className="text-base font-bold" style={{ color: '#16A34A' }}>{team.wins}</div>
+                          <div className="text-xs" style={{ color: 'var(--color-muted)' }}>W</div>
+                        </div>
+                        <div>
+                          <div className="text-base font-bold" style={{ color: 'var(--color-danger)' }}>{team.losses}</div>
+                          <div className="text-xs" style={{ color: 'var(--color-muted)' }}>L</div>
+                        </div>
+                        <div>
+                          <div className="text-base font-bold" style={{ color: 'var(--color-muted)' }}>{team.ties}</div>
+                          <div className="text-xs" style={{ color: 'var(--color-muted)' }}>T</div>
+                        </div>
+                      </div>
+                      <div className="mt-1.5 text-xs text-center" style={{ color: 'var(--color-muted)' }}>
+                        Avg net {team.avgNet || '—'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Activity Feed */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Activity</CardTitle>
+              </CardHeader>
+              {activity.length === 0 ? (
+                <p className="text-sm text-center py-4" style={{ color: 'var(--color-muted)' }}>No activity yet.</p>
+              ) : (
+                <div className="space-y-2 mt-1">
+                  {activity.slice(0, 6).map(evt => (
+                    <div key={evt.id} className="flex items-start gap-2.5 py-1.5">
+                      <span className="text-sm flex-shrink-0 mt-0.5">{ACTIVITY_ICONS[evt.type] || '📋'}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs leading-snug" style={{ color: 'var(--color-text)' }}>{evt.description}</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                          {new Date(evt.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );
