@@ -5,8 +5,8 @@ import { TopBar } from '../layout/TopBar';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 
-export function Leaderboard({ players, rounds, courses }) {
-  const [view, setView] = useState('season'); // 'season' | 'round'
+export function Leaderboard({ players, rounds, courses, teams = [], league }) {
+  const [view, setView] = useState('season'); // 'season' | 'round' | 'teams'
   const [selectedRoundId, setSelectedRoundId] = useState(rounds[rounds.length - 1]?.id || '');
   const [scoreType, setScoreType] = useState('net'); // 'gross' | 'net' | 'stableford'
 
@@ -77,6 +77,41 @@ export function Leaderboard({ players, rounds, courses }) {
     }).sort((a, b) => a.sortValue - b.sortValue);
   }, [rounds, selectedRoundId, players, courses, scoreType]);
 
+  // Team standings
+  const teamStandingsData = useMemo(() => {
+    if (!teams.length) return [];
+    return teams.map(team => {
+      let wins = 0, losses = 0, ties = 0, totalNet = 0, roundCount = 0;
+      let lowRound = Infinity, lowRoundDate = null;
+      rounds.forEach(r => {
+        const teamScores = team.playerIds
+          .map(pid => r.scores?.find(s => s.playerId === pid)).filter(Boolean);
+        if (!teamScores.length) return;
+        const teamBest = Math.min(...teamScores.map(s => s.totalNet));
+        totalNet += teamBest;
+        roundCount++;
+        if (teamBest < lowRound) { lowRound = teamBest; lowRoundDate = r.date; }
+        const otherTeams = teams.filter(t => t.id !== team.id);
+        otherTeams.forEach(opp => {
+          const oppScores = opp.playerIds
+            .map(pid => r.scores?.find(s => s.playerId === pid)).filter(Boolean);
+          if (!oppScores.length) return;
+          const oppBest = Math.min(...oppScores.map(s => s.totalNet));
+          if (teamBest < oppBest) wins++;
+          else if (teamBest > oppBest) losses++;
+          else ties++;
+        });
+      });
+      const contributors = team.playerIds.map(pid => {
+        const p = players.find(pl => pl.id === pid);
+        const pr = rounds.filter(r => r.playerIds.includes(pid));
+        const totalPlayerNet = pr.reduce((s, r) => s + (r.scores?.find(sc => sc.playerId === pid)?.totalNet || 0), 0);
+        return { player: p, rounds: pr.length, avgNet: pr.length ? Math.round(totalPlayerNet / pr.length * 10) / 10 : 0 };
+      }).filter(c => c.player).sort((a, b) => a.avgNet - b.avgNet);
+      return { ...team, wins, losses, ties, avgNet: roundCount ? Math.round(totalNet / roundCount * 10) / 10 : 0, roundCount, lowRound: lowRound === Infinity ? null : lowRound, lowRoundDate, contributors };
+    }).sort((a, b) => b.wins - a.wins || a.avgNet - b.avgNet);
+  }, [teams, rounds, players]);
+
   const tableData = view === 'season' ? seasonData : roundData;
   const selectedRound = rounds.find(r => r.id === selectedRoundId);
   const selectedCourse = selectedRound ? courses.find(c => c.id === selectedRound.courseId) : null;
@@ -117,7 +152,7 @@ export function Leaderboard({ players, rounds, courses }) {
       <TopBar title="Leaderboard" subtitle={`Season ${rounds.length ? new Date(rounds[0]?.date).getFullYear() : '2025'} standings`}>
         <div className="flex gap-2 flex-wrap">
           <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-            {['season', 'round'].map(v => (
+            {[['season','Season'],['round','Round'],['teams','Teams']].map(([v, label]) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -127,7 +162,7 @@ export function Leaderboard({ players, rounds, courses }) {
                   color: view === v ? 'white' : 'var(--color-muted)',
                 }}
               >
-                {v === 'season' ? 'Season' : 'Single Round'}
+                {label}
               </button>
             ))}
           </div>
@@ -193,8 +228,62 @@ export function Leaderboard({ players, rounds, courses }) {
           </div>
         )}
 
+        {/* Teams view */}
+        {view === 'teams' && (
+          <div className="space-y-4">
+            {teamStandingsData.length === 0 ? (
+              <Card><p className="py-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>No teams configured yet. Set them up in the Teams section.</p></Card>
+            ) : teamStandingsData.map((team, i) => (
+              <Card key={team.id}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm"
+                      style={{ backgroundColor: team.color || 'var(--color-primary)', color: 'white' }}>
+                      {team.initials || team.name.slice(0, 2)}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-base" style={{ fontFamily: 'Cormorant Garamond, serif', color: 'var(--color-text)', fontSize: '18px' }}>{team.name}</h3>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs font-medium" style={{ color: '#16A34A' }}>{team.wins}W</span>
+                        <span className="text-xs font-medium" style={{ color: 'var(--color-danger)' }}>{team.losses}L</span>
+                        <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{team.ties}T</span>
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>· avg net {team.avgNet || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {i === 0 && <Badge variant="accent">Season Leader</Badge>}
+                    {team.lowRound && (
+                      <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                        Low round: <span className="font-medium" style={{ color: 'var(--color-text)' }}>{team.lowRound}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
+                  <h4 className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Contributors</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {team.contributors.map(c => (
+                      <div key={c.player.id} className="flex items-center gap-2 p-2 rounded-lg" style={{ backgroundColor: 'var(--color-bg)' }}>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                          style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>
+                          {c.player.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        </div>
+                        <div>
+                          <div className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{c.player.name.split(' ')[0]}</div>
+                          <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{c.avgNet} avg</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+
         {/* Main table */}
-        <Card>
+        {view !== 'teams' && <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -268,7 +357,7 @@ export function Leaderboard({ players, rounds, courses }) {
               </tbody>
             </table>
           </div>
-        </Card>
+        </Card>}
       </div>
     </div>
   );
