@@ -116,13 +116,35 @@ const CTP_BY_ROUND = {
   r6: [{ hole: 3, winnerId: 'p7', distance: "2'11\"" }],
 };
 
-export function generateMockData() {
-  const leagueCourses = COURSE_DATABASE.slice(0, 3); // first 3 are the league courses
+export function generateMockData(leagueId = 'league-1', leagueName = 'Westside Golf League') {
   const allCourses = COURSE_DATABASE;
 
+  const teams = [
+    { id: 't1', name: 'Team Birdie', color: '#1B4332', initials: 'TB', playerIds: ['p7','p1','p2','p4'] },
+    { id: 't2', name: 'Team Eagle',  color: '#B8972A', initials: 'TE', playerIds: ['p3','p5','p6','p8'] },
+  ];
+
+  const activity = [
+    { id: 'act1', type: 'round_finalized', description: 'Round finalized: Jun 21 at Olympia Fields North', playerId: 'p1', roundId: 'r6', timestamp: '2025-06-21T18:30:00Z' },
+    { id: 'act2', type: 'skin_recorded',   description: 'Chris Weston won 3 skins in Round 6', playerId: 'p7', roundId: 'r6', timestamp: '2025-06-21T18:31:00Z' },
+    { id: 'act3', type: 'ctp_recorded',    description: 'Chris Weston won CTP on Hole 3 (2\'11")', playerId: 'p7', roundId: 'r6', timestamp: '2025-06-21T18:32:00Z' },
+    { id: 'act4', type: 'round_finalized', description: 'Round finalized: Jun 7 at Medinah CC #3', playerId: 'p1', roundId: 'r5', timestamp: '2025-06-07T18:00:00Z' },
+    { id: 'act5', type: 'handicap_updated', description: 'Tom Reyes handicap updated to 5.1', playerId: 'p3', timestamp: '2025-06-01T12:00:00Z' },
+    { id: 'act6', type: 'member_joined',   description: 'Lisa Park joined the league', playerId: 'p8', timestamp: '2025-04-01T09:00:00Z' },
+  ];
+
+  const schedule = [
+    { id: 'sch1', name: 'Round 7 — Cog Hill',   date: '2025-07-12', type: 'round',  notes: 'Tee times from 8am' },
+    { id: 'sch2', name: 'Round 8 — Medinah',     date: '2025-07-26', type: 'round',  notes: '' },
+    { id: 'sch3', name: 'Mid-Season Banquet',     date: '2025-07-19', type: 'event',  notes: 'Clubhouse dining room, 7pm' },
+    { id: 'sch4', name: 'Round 9 — Olympia Fields', date: '2025-08-09', type: 'round', notes: '' },
+    { id: 'sch5', name: 'Season Championship',   date: '2025-09-20', type: 'round',  notes: 'Match play — bring your A-game' },
+    { id: 'sch6', name: 'Season Finale & Payouts', date: '2025-10-11', type: 'event', notes: 'Awards dinner + payout' },
+  ];
+
   const league = {
-    id: 'league-1',
-    name: 'Westside Golf League',
+    id: leagueId,
+    name: leagueName,
     season: '2025',
     homeCourseId: 'cog-hill-4',
     startDate: '2025-04-01',
@@ -143,6 +165,16 @@ export function generateMockData() {
       { place: 6, points: 1 },
     ],
     inviteCode: 'WGL25X',
+    // Scoring rules (Phase 2)
+    scoreEntryPermission: 'all',
+    scoringMode: 'individual',
+    teamSize: 2,
+    teamStructure: 'fixed',
+    allowTies: true,
+    tiebreaker: 'card_playoff',
+    matchNoShow: 'forfeit',
+    scoreVisibility: 'public',
+    teamsEnabled: true,
   };
 
   const players = PLAYER_SEEDS.map(p => ({ ...p }));
@@ -191,5 +223,5 @@ export function generateMockData() {
     };
   });
 
-  return { league, players, rounds, courses: allCourses };
+  return { league, players, rounds, courses: allCourses, teams, activity, schedule };
 }
