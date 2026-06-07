@@ -64,6 +64,20 @@ export function calcHandicapIndex(differentials) {
   return index;
 }
 
+// Partition rounds into first and second halves for split-season tracking
+export function partitionRoundsByHalf(rounds, breakpoint) {
+  const sorted = [...rounds].sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (!breakpoint) return { firstHalf: sorted, secondHalf: [] };
+  if (breakpoint.type === 'round') {
+    const n = breakpoint.value || 0;
+    return { firstHalf: sorted.slice(0, n), secondHalf: sorted.slice(n) };
+  }
+  return {
+    firstHalf: sorted.filter(r => r.date < breakpoint.value),
+    secondHalf: sorted.filter(r => r.date >= breakpoint.value),
+  };
+}
+
 // Adjusted gross score (Equitable Stroke Control)
 export function adjustedGross(grossScores, holes, playingHandicap) {
   const maxPerHole = (hcp) => {

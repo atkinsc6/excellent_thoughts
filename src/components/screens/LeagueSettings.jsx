@@ -282,6 +282,53 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
           </div>
         </Section>
 
+        {/* Season Structure */}
+        <Section title="Season Structure">
+          <Toggle
+            label="Split into halves"
+            checked={form.splitIntoHalves || false}
+            onChange={v => update('splitIntoHalves', v)}
+            description="Track 1st half and 2nd half standings alongside overall"
+          />
+          {form.splitIntoHalves && (
+            <div className="space-y-3 pt-1">
+              <RadioGroup
+                label="Midpoint type"
+                value={form.halvesBreakpoint?.type || 'round'}
+                onChange={v => update('halvesBreakpoint', { type: v, value: v === 'round' ? (form.halvesBreakpoint?.value || 4) : (form.halvesBreakpoint?.value || '') })}
+                options={[
+                  { value: 'round', label: 'After round N' },
+                  { value: 'date', label: 'By date' },
+                ]}
+              />
+              {(form.halvesBreakpoint?.type || 'round') === 'round' ? (
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Split after round #</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.halvesBreakpoint?.value || 4}
+                    onChange={e => update('halvesBreakpoint', { type: 'round', value: parseInt(e.target.value) || 1 })}
+                    className="w-24 px-3 py-2 rounded-lg border text-sm"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-surface)' }}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Midpoint date</label>
+                  <input
+                    type="date"
+                    value={form.halvesBreakpoint?.value || ''}
+                    onChange={e => update('halvesBreakpoint', { type: 'date', value: e.target.value })}
+                    className="w-full sm:w-48 px-3 py-2 rounded-lg border text-sm"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-surface)' }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </Section>
+
         {/* Scoring Rules */}
         <Section title="Scoring Rules">
           <RadioGroup

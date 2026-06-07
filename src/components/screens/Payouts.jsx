@@ -1,12 +1,25 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
+import { partitionRoundsByHalf } from '../../utils/scoring';
 import { DollarSign, Trophy, Target, Download, TrendingUp, CalendarDays } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { seasonSkinsTotals, skinsSummary } from '../../utils/skins';
 
 export function Payouts({ league, players, rounds, courses }) {
-  const finalizedRounds = useMemo(() => rounds.filter(r => r.finalized), [rounds]);
+  const [halfFilter, setHalfFilter] = useState('all'); // 'all' | 'first' | 'second'
+
+  const allFinalized = useMemo(() => rounds.filter(r => r.finalized), [rounds]);
+
+  const { firstHalf: fh, secondHalf: sh } = useMemo(() =>
+    partitionRoundsByHalf(allFinalized, league?.halvesBreakpoint)
+  , [allFinalized, league]);
+
+  const finalizedRounds = useMemo(() => {
+    if (!league?.splitIntoHalves || halfFilter === 'all') return allFinalized;
+    if (halfFilter === 'first') return fh;
+    return sh;
+  }, [allFinalized, league, halfFilter, fh, sh]);
 
   const skinsEntry = league?.skinsEntry || 5;
 
@@ -99,17 +112,30 @@ export function Payouts({ league, players, rounds, courses }) {
   return (
     <div className="flex-1 overflow-y-auto pb-20 lg:pb-6" style={{ backgroundColor: 'var(--color-bg)' }}>
       <div className="p-6 max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <h1 className="text-3xl font-bold" style={{ fontFamily: 'Cormorant Garamond, serif', color: 'var(--color-text)' }}>
             Payouts
           </h1>
-          <button
-            onClick={exportCSV}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
-            style={{ backgroundColor: 'var(--color-accent)' }}
-          >
-            <Download size={14} /> Export CSV
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {league?.splitIntoHalves && (
+              <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                {[['all','Overall'],['first','1st Half'],['second','2nd Half']].map(([v, label]) => (
+                  <button key={v} onClick={() => setHalfFilter(v)}
+                    className="px-3 py-1.5 text-sm font-medium transition-all"
+                    style={{ backgroundColor: halfFilter === v ? 'var(--color-primary)' : 'var(--color-surface)', color: halfFilter === v ? 'white' : 'var(--color-muted)' }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={exportCSV}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+              style={{ backgroundColor: 'var(--color-accent)' }}
+            >
+              <Download size={14} /> Export CSV
+            </button>
+          </div>
         </div>
 
         {/* Stat cards */}
