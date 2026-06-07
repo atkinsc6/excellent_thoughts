@@ -5,6 +5,84 @@ import { ArrowLeft, Printer, Trophy, Target, DollarSign } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { calcSkins, skinsSummary } from '../../utils/skins';
+import { calcMatchPlay } from '../../utils/scoring';
+
+function MatchHoleCell({ result }) {
+  const style = result === 'W'
+    ? { backgroundColor: 'rgba(22,163,74,0.2)', color: '#16a34a', fontWeight: 700 }
+    : result === 'L'
+    ? { backgroundColor: 'rgba(220,38,38,0.12)', color: 'var(--color-danger)', fontWeight: 700 }
+    : result === 'H'
+    ? { backgroundColor: 'rgba(107,114,128,0.1)', color: 'var(--color-muted)' }
+    : { color: 'var(--color-muted)' };
+  return (
+    <span className="inline-flex w-7 h-6 items-center justify-center rounded text-xs" style={style}>
+      {result ?? '—'}
+    </span>
+  );
+}
+
+function MatchPairViewer({ pair, players, course }) {
+  const p1 = players.find(p => p.id === pair.player1Id);
+  const p2 = players.find(p => p.id === pair.player2Id);
+  const winner = pair.winnerId ? players.find(p => p.id === pair.winnerId) : null;
+  const holeResults = pair.holeResults || [];
+  const p1Name = p1?.name?.split(' ')[0] || '?';
+  const p2Name = p2?.name?.split(' ')[0] || '?';
+
+  const conclusionLabel = pair.conclusion === 'all_square'
+    ? 'All Square'
+    : winner
+    ? `${winner.name.split(' ')[0]} wins ${pair.conclusion}`
+    : pair.conclusion || 'In progress';
+
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="flex items-center justify-between px-4 py-3 flex-wrap gap-2" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>
+        <div className="flex items-center gap-3">
+          <span className="font-semibold text-sm">{p1Name}</span>
+          <span className="text-xs opacity-60">vs</span>
+          <span className="font-semibold text-sm">{p2Name}</span>
+        </div>
+        {pair.conclusion ? (
+          <span className="px-2 py-1 rounded-lg text-xs font-bold" style={{ backgroundColor: 'rgba(184,151,42,0.25)', color: 'var(--color-accent)' }}>
+            {conclusionLabel}
+          </span>
+        ) : null}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="text-xs w-full" style={{ minWidth: '400px' }}>
+          <thead>
+            <tr style={{ backgroundColor: 'rgba(27,67,50,0.06)' }}>
+              {Array.from({ length: 18 }, (_, i) => (
+                <th key={i} className="px-1 py-2 text-center font-semibold" style={{ color: 'var(--color-muted)', minWidth: '32px' }}>{i + 1}</th>
+              ))}
+            </tr>
+            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+              <td colSpan={9} className="px-2 py-1 text-xs font-semibold text-center" style={{ color: 'var(--color-primary)', borderRight: '2px solid var(--color-border)' }}>Front 9</td>
+              <td colSpan={9} className="px-2 py-1 text-xs font-semibold text-center" style={{ color: 'var(--color-primary)' }}>Back 9</td>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {holeResults.slice(0, 18).map((result, i) => (
+                <td key={i} className="px-0.5 py-2 text-center" style={{ borderRight: i === 8 ? '2px solid var(--color-border)' : undefined }}>
+                  <MatchHoleCell result={result} />
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+        <div className="flex items-center gap-3 px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+          <span>Results from <strong style={{ color: 'var(--color-text)' }}>{p1Name}</strong>'s perspective:</span>
+          <MatchHoleCell result="W" /> Win
+          <MatchHoleCell result="H" /> Halved
+          <MatchHoleCell result="L" /> Loss
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function scoreStyle(gross, par) {
   if (!gross || !par) return {};
@@ -113,9 +191,21 @@ export function RoundViewer({ players, rounds, courses, league }) {
           </button>
         </div>
 
+        {/* Match play results */}
+        {round.format === 'match' && round.matchResult?.pairs?.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle>Match Play Results</CardTitle></CardHeader>
+            <div className="space-y-4 mt-3">
+              {round.matchResult.pairs.map((pair, i) => (
+                <MatchPairViewer key={i} pair={pair} players={players} course={course} />
+              ))}
+            </div>
+          </Card>
+        )}
+
         {/* Full scorecard */}
         <Card>
-          <CardHeader><CardTitle>Full Scorecard</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{round.format === 'match' ? 'Individual Scores' : 'Full Scorecard'}</CardTitle></CardHeader>
           <div className="overflow-x-auto mt-3">
             <table className="text-xs" style={{ minWidth: `${200 + selectedPlayers.length * 80}px` }}>
               <thead>

@@ -183,6 +183,7 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
               onChange={e => update('name', e.target.value)}
               className="col-span-2 sm:col-span-1"
             />
+
             <Input
               label="Season"
               value={form.season || ''}
@@ -201,6 +202,12 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
               onChange={e => update('endDate', e.target.value)}
             />
           </div>
+          <Toggle
+            label="Public League Page"
+            checked={!!form.isPublic}
+            onChange={v => update('isPublic', v)}
+            description="Share a public standings page. Use the share button on the public page to generate a cross-device link."
+          />
         </Section>
 
         {/* Scoring Formats */}

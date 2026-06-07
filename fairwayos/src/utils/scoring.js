@@ -80,6 +80,74 @@ export function calcScorecardBreakdown(grossScores, holes) {
   return { eagles, birdies, pars, bogeys, doubles, worse };
 }
 
+// Match play: compute hole results and running status from two players' net scores
+// Returns { holeResults: ('W'|'L'|'H'|null)[], runningStatus, conclusion }
+export function calcMatchPlay(p1NetScores, p2NetScores) {
+  const holeResults = [];
+  let p1Lead = 0;
+  let thru = 0;
+  let concluded = false;
+  let conclusion = null;
+
+  for (let i = 0; i < 18; i++) {
+    const p1 = p1NetScores[i];
+    const p2 = p2NetScores[i];
+    if (!p1 || !p2) { holeResults.push(null); continue; }
+    thru++;
+    if (p1 < p2) { holeResults.push('W'); p1Lead++; }
+    else if (p1 > p2) { holeResults.push('L'); p1Lead--; }
+    else holeResults.push('H');
+
+    if (!concluded) {
+      const holesLeft = 18 - (i + 1);
+      const abs = Math.abs(p1Lead);
+      if (abs > holesLeft) {
+        concluded = true;
+        conclusion = holesLeft === 0 ? `${abs} up` : `${abs}&${holesLeft}`;
+      } else if (holesLeft === 0 && p1Lead === 0) {
+        concluded = true;
+        conclusion = 'all_square';
+      }
+    }
+  }
+
+  return {
+    holeResults,
+    runningStatus: {
+      leader: p1Lead > 0 ? 'player1' : p1Lead < 0 ? 'player2' : 'tied',
+      margin: Math.abs(p1Lead),
+      thru,
+      concluded,
+      conclusion,
+    },
+    conclusion,
+  };
+}
+
+// Better ball: best net score per hole across team members
+// Returns { holeScores: [{ net, countingPlayerId }], totalNet }
+export function calcBetterBallTeamScore(teamPlayerIds, scores, holes) {
+  const teamScores = scores.filter(s => teamPlayerIds.includes(s.playerId));
+  const holeScores = (holes || []).map((_, i) => {
+    let best = Infinity;
+    let countingPlayerId = null;
+    teamScores.forEach(s => {
+      const net = s.netScores?.[i];
+      if (net && net > 0 && net < best) { best = net; countingPlayerId = s.playerId; }
+    });
+    return { net: best === Infinity ? 0 : best, countingPlayerId };
+  });
+  return { holeScores, totalNet: holeScores.reduce((s, h) => s + h.net, 0) };
+}
+
+// Scramble team handicap: average of team member indexes × 0.9
+export function calcScrambleHandicap(teamPlayerIds, players) {
+  const team = players.filter(p => teamPlayerIds.includes(p.id));
+  if (!team.length) return 0;
+  const avg = team.reduce((s, p) => s + (p.handicapIndex || 0), 0) / team.length;
+  return Math.round(avg * 0.9);
+}
+
 // Partition rounds into first and second halves for split-season tracking
 export function partitionRoundsByHalf(rounds, breakpoint) {
   const sorted = [...rounds].sort((a, b) => new Date(a.date) - new Date(b.date));
