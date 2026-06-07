@@ -423,6 +423,47 @@ export function RoundViewer({ players, rounds, courses, league }) {
             </Card>
           )}
         </div>
+
+        {/* Nassau results */}
+        {round.nassauResult?.pairs?.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <DollarSign size={16} style={{ color: 'var(--color-accent)' }} />
+                <CardTitle>Nassau — ${round.nassauResult.amount}/bet · {round.nassauResult.useNet ? 'Net' : 'Gross'}</CardTitle>
+              </div>
+            </CardHeader>
+            <div className="space-y-3 mt-3">
+              {round.nassauResult.pairs.map((pair, i) => {
+                const p1 = players.find(p => p.id === pair.player1Id);
+                const p2 = players.find(p => p.id === pair.player2Id);
+                const p1Name = p1?.name?.split(' ')[0] || '?';
+                const p2Name = p2?.name?.split(' ')[0] || '?';
+                return (
+                  <div key={i} className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{p1Name} vs {p2Name}</span>
+                      <span className="text-sm font-bold" style={{ color: pair.p1Winnings > 0 ? '#16a34a' : pair.p1Winnings < 0 ? 'var(--color-danger)' : 'var(--color-muted)' }}>
+                        {pair.p1Winnings > 0 ? `${p1Name} +$${pair.p1Winnings}` : pair.p1Winnings < 0 ? `${p2Name} +$${-pair.p1Winnings}` : 'Even'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      {[['Front 9', pair.front], ['Back 9', pair.back], ['Overall', pair.overall]].map(([label, bet]) => (
+                        <div key={label} className="rounded-lg py-2 px-1" style={{ backgroundColor: 'rgba(27,67,50,0.04)', border: '1px solid var(--color-border)' }}>
+                          <div className="text-xs font-semibold mb-0.5" style={{ color: 'var(--color-muted)' }}>{label}</div>
+                          <div className="text-xs font-medium" style={{ color: bet?.winner === 'tied' || !bet?.winner ? 'var(--color-muted)' : 'var(--color-primary)' }}>
+                            {!bet?.winner ? '—' : bet.winner === 'tied' ? 'Halved' : bet.winner === 'player1' ? `${p1Name}` : `${p2Name}`}
+                          </div>
+                          {bet?.s1 > 0 && <div className="text-xs opacity-60 mt-0.5" style={{ color: 'var(--color-muted)' }}>{bet.s1} – {bet.s2}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );
