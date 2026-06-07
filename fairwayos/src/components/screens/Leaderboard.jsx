@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
+import { partitionRoundsByHalf } from '../../utils/scoring';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TopBar } from '../layout/TopBar';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
@@ -12,10 +13,22 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
 
   const sortedRounds = useMemo(() => [...rounds].sort((a, b) => new Date(b.date) - new Date(a.date)), [rounds]);
 
+  // Halves partitioning
+  const { firstHalf, secondHalf } = useMemo(() =>
+    partitionRoundsByHalf(rounds, league?.halvesBreakpoint)
+  , [rounds, league]);
+
+  // Active round set for season-style views
+  const activeRounds = useMemo(() => {
+    if (view === '1h') return firstHalf;
+    if (view === '2h') return secondHalf;
+    return rounds;
+  }, [view, rounds, firstHalf, secondHalf]);
+
   // Season leaderboard
   const seasonData = useMemo(() => {
     return players.map(p => {
-      const pr = rounds.filter(r => r.playerIds.includes(p.id));
+      const pr = activeRounds.filter(r => r.playerIds.includes(p.id));
       const totalGross = pr.reduce((s, r) => s + (r.scores?.find(sc => sc.playerId === p.id)?.totalGross || 0), 0);
       const totalNet   = pr.reduce((s, r) => s + (r.scores?.find(sc => sc.playerId === p.id)?.totalNet   || 0), 0);
       const totalStab  = pr.reduce((s, r) => s + (r.scores?.find(sc => sc.playerId === p.id)?.totalStableford || 0), 0);
@@ -49,7 +62,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
           : (n ? -totalStab / n : 999),
       };
     }).sort((a, b) => a.sortValue - b.sortValue);
-  }, [players, rounds, courses, scoreType]);
+  }, [players, activeRounds, courses, scoreType]);
 
   // Single round leaderboard
   const roundData = useMemo(() => {
@@ -112,7 +125,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
     }).sort((a, b) => b.wins - a.wins || a.avgNet - b.avgNet);
   }, [teams, rounds, players]);
 
-  const tableData = view === 'season' ? seasonData : roundData;
+  const tableData = (view === 'season' || view === '1h' || view === '2h') ? seasonData : roundData;
   const selectedRound = rounds.find(r => r.id === selectedRoundId);
   const selectedCourse = selectedRound ? courses.find(c => c.id === selectedRound.courseId) : null;
 
@@ -122,7 +135,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
     let lowNet = { score: Infinity, player: null };
     let totalBirdies = 0, totalEagles = 0;
     players.forEach(p => {
-      const pr = rounds.filter(r => r.playerIds.includes(p.id));
+      const pr = activeRounds.filter(r => r.playerIds.includes(p.id));
       pr.forEach(r => {
         const ps = r.scores?.find(sc => sc.playerId === p.id);
         const course = courses.find(c => c.id === r.courseId);
@@ -137,7 +150,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
       });
     });
     return { lowGross, lowNet, totalBirdies, totalEagles };
-  }, [players, rounds, courses]);
+  }, [players, activeRounds, courses]);
 
   const scoreLabels = { gross: 'Gross', net: 'Net', stableford: 'Stableford' };
   const vsParDisplay = (val) => {
@@ -152,7 +165,12 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
       <TopBar title="Leaderboard" subtitle={`Season ${rounds.length ? new Date(rounds[0]?.date).getFullYear() : '2025'} standings`}>
         <div className="flex gap-2 flex-wrap">
           <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-            {[['season','Season'],['round','Round'],['teams','Teams']].map(([v, label]) => (
+            {[
+              ['season','Season'],
+              ...(league?.splitIntoHalves ? [['1h','1st Half'],['2h','2nd Half']] : []),
+              ['round','Round'],
+              ['teams','Teams'],
+            ].map(([v, label]) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -186,7 +204,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
 
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         {/* Season stat cards */}
-        {view === 'season' && (
+        {(view === 'season' || view === '1h' || view === '2h') && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'Scoring Avg', value: seasonData[0]?.avgNet, sub: 'Best avg net' },
@@ -290,7 +308,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
                 <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
                   <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide w-10" style={{ color: 'var(--color-muted)' }}>#</th>
                   <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Player</th>
-                  {view === 'season' ? (
+                  {(view === 'season' || view === '1h' || view === '2h') ? (
                     <>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Rounds</th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Avg Gross</th>
@@ -333,7 +351,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
                         {i === 0 && <Badge variant="accent">Leader</Badge>}
                       </div>
                     </td>
-                    {view === 'season' ? (
+                    {(view === 'season' || view === '1h' || view === '2h') ? (
                       <>
                         <td className="px-3 py-3 text-center" style={{ color: 'var(--color-muted)' }}>{row.rounds}</td>
                         <td className="px-3 py-3 text-center" style={{ color: 'var(--color-text)' }}>{row.avgGross}</td>

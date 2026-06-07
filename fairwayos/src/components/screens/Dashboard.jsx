@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { useHandicap } from '../../hooks/useHandicap';
 import { seasonSkinsTotals } from '../../utils/skins';
+import { partitionRoundsByHalf } from '../../utils/scoring';
 
 const PLAYER_COLORS = ['#1B4332','#B8972A','#2D6A4F','#DC2626','#7C3AED','#0284C7','#D97706','#059669'];
 
@@ -15,7 +16,7 @@ const ACTIVITY_ICONS = {
   settings_updated: '⚙️', team_created: '👥', league_created: '🏆',
 };
 
-export function Dashboard({ league, players, rounds, courses, teams = [], activity = [] }) {
+export function Dashboard({ league, players, rounds, courses, teams = [], activity = [], schedule = [] }) {
   const { getDifferentials, getHandicapTrend } = useHandicap(players, rounds, courses);
 
   const stats = useMemo(() => {
@@ -89,6 +90,29 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
       };
     }).sort((a, b) => b.points - a.points || a.avgNet - b.avgNet);
   }, [players, rounds, stats, league]);
+
+  // Season halves
+  const { firstHalf, secondHalf } = useMemo(() =>
+    partitionRoundsByHalf(rounds, league?.halvesBreakpoint)
+  , [rounds, league]);
+
+  const buildHalfStandings = (roundSubset) =>
+    players.map(p => {
+      const pr = roundSubset.filter(r => r.playerIds.includes(p.id));
+      const totalNet = pr.reduce((s, r) => s + (r.scores?.find(sc => sc.playerId === p.id)?.totalNet || 0), 0);
+      let points = 0;
+      roundSubset.forEach(r => {
+        if (!r.playerIds.includes(p.id)) return;
+        const sorted = [...(r.scores || [])].sort((a, b) => a.totalNet - b.totalNet);
+        const rank = sorted.findIndex(s => s.playerId === p.id) + 1;
+        const pts = league?.pointsTable?.find(pt => pt.place === rank)?.points || 0;
+        points += pts;
+      });
+      return { id: p.id, name: p.name, rounds: pr.length, avgNet: pr.length ? Math.round(totalNet / pr.length * 10) / 10 : 0, points };
+    }).filter(r => r.rounds > 0).sort((a, b) => b.points - a.points || a.avgNet - b.avgNet);
+
+  const firstHalfStandings = useMemo(() => buildHalfStandings(firstHalf), [firstHalf, players, league]);
+  const secondHalfStandings = useMemo(() => buildHalfStandings(secondHalf), [secondHalf, players, league]);
 
   // Recent round
   const recentRound = useMemo(() => {
@@ -439,6 +463,42 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
             </Card>
           </div>
         </div>
+        {/* Season Halves */}
+        {league?.splitIntoHalves && (
+          <Card>
+            <CardHeader><CardTitle>Season Halves</CardTitle></CardHeader>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              {[
+                { label: '1st Half', data: firstHalfStandings, rounds: firstHalf.length },
+                { label: '2nd Half', data: secondHalfStandings, rounds: secondHalf.length },
+              ].map(half => (
+                <div key={half.label}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{half.label}</span>
+                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{half.rounds} round{half.rounds !== 1 ? 's' : ''}</span>
+                  </div>
+                  {half.data.length === 0 ? (
+                    <p className="text-xs py-4 text-center" style={{ color: 'var(--color-muted)' }}>No rounds yet</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {half.data.slice(0, 5).map((row, i) => (
+                        <div key={row.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg"
+                          style={{ backgroundColor: i === 0 ? 'rgba(184,151,42,0.08)' : 'var(--color-bg)' }}>
+                          <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                            style={{ backgroundColor: i === 0 ? 'var(--color-accent)' : 'rgba(107,114,128,0.12)', color: i === 0 ? 'var(--color-primary)' : 'var(--color-muted)' }}>
+                            {i + 1}
+                          </span>
+                          <span className="flex-1 text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{row.name.split(' ')[0]}</span>
+                          <span className="text-xs font-bold" style={{ color: 'var(--color-accent)' }}>{row.points}pt</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );
