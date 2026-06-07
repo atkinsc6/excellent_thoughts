@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { useLeague } from './hooks/useLeague';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileNav } from './components/layout/MobileNav';
 import { Dashboard } from './components/screens/Dashboard';
@@ -17,7 +18,22 @@ import { PlayerProfile } from './components/screens/PlayerProfile';
 import { Schedule } from './components/screens/Schedule';
 import { Payouts } from './components/screens/Payouts';
 import { RoundViewer } from './components/screens/RoundViewer';
+import { Awards } from './components/screens/Awards';
+import { TeeSheet } from './components/screens/TeeSheet';
+import { PublicLeague } from './components/screens/PublicLeague';
 import { Login } from './components/screens/Login';
+
+function OfflineBanner() {
+  const isOnline = useOnlineStatus();
+  if (isOnline) return null;
+  return (
+    <div className="offline-banner no-print flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium"
+      style={{ backgroundColor: 'rgba(184,151,42,0.15)', color: 'var(--color-accent)', borderBottom: '1px solid rgba(184,151,42,0.3)' }}>
+      <span className="w-2 h-2 rounded-full bg-current flex-shrink-0" />
+      You&rsquo;re offline. Scores will save locally.
+    </div>
+  );
+}
 
 function AppShell() {
   const { user, activeLeagueId, loading: authLoading } = useAuth();
@@ -62,6 +78,7 @@ function AppShell() {
     <div className="flex min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
       <Sidebar league={league} activity={activity} getNotifReadAt={getNotifReadAt} markNotifsRead={markNotifsRead} />
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        <OfflineBanner />
         <Routes>
           <Route path="/" element={<Dashboard {...sharedProps} />} />
           <Route path="/scorecard" element={<RoundWizard {...sharedProps} />} />
@@ -77,6 +94,8 @@ function AppShell() {
           <Route path="/schedule" element={<Schedule {...sharedProps} />} />
           <Route path="/round/:roundId" element={<RoundViewer {...sharedProps} />} />
           <Route path="/payouts" element={<Payouts {...sharedProps} />} />
+          <Route path="/awards" element={<Awards {...sharedProps} />} />
+          <Route path="/teesheet/:eventId" element={<TeeSheet {...sharedProps} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <MobileNav />
@@ -89,7 +108,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppShell />
+        <Routes>
+          <Route path="/public/:leagueId" element={<PublicLeague />} />
+          <Route path="/*" element={<AppShell />} />
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   );

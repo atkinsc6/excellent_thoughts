@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Trophy, DollarSign, Target, TrendingUp, Users, MapPin, Settings,
-  Users2, CalendarDays, Bell, ChevronDown, Plus, LogIn, LogOut, Check
+  Users2, CalendarDays, Bell, ChevronDown, Plus, LogIn, LogOut, Check, Award, Download
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { path: '/skins',       icon: DollarSign,       label: 'Skins' },
   { path: '/ctp',         icon: Target,           label: 'CTP' },
   { path: '/handicap',    icon: TrendingUp,       label: 'Handicap' },
+  { path: '/awards',      icon: Award,            label: 'Awards' },
   { path: '/members',     icon: Users,            label: 'Members' },
   { path: '/courses',     icon: MapPin,           label: 'Courses' },
   { path: '/schedule',    icon: CalendarDays,     label: 'Schedule' },
@@ -29,8 +30,15 @@ export function Sidebar({ league, activity = [], getNotifReadAt, markNotifsRead 
   const [showNotifs, setShowNotifs] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [newLeagueName, setNewLeagueName] = useState('');
-  const [switcherTab, setSwitcherTab] = useState('leagues'); // 'leagues' | 'join' | 'create'
+  const [switcherTab, setSwitcherTab] = useState('leagues');
   const [error, setError] = useState('');
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
 
   const lastRead = getNotifReadAt?.();
   const unreadCount = lastRead
@@ -169,8 +177,18 @@ export function Sidebar({ league, activity = [], getNotifReadAt, markNotifsRead 
           })}
         </nav>
 
-        {/* Footer: notifications + user */}
+        {/* Footer: install prompt + notifications + user */}
         <div className="px-3 pb-4 pt-2 border-t space-y-2" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+          {installPrompt && (
+            <button
+              onClick={() => { installPrompt.prompt(); setInstallPrompt(null); }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all"
+              style={{ color: 'rgba(255,255,255,0.7)', backgroundColor: 'rgba(184,151,42,0.1)', border: '1px solid rgba(184,151,42,0.2)' }}
+            >
+              <Download size={14} style={{ color: 'var(--color-accent)' }} />
+              <span>Add to Home Screen</span>
+            </button>
+          )}
           {/* Notification bell */}
           <button onClick={handleNotifClick}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all relative"
