@@ -64,6 +64,22 @@ export function calcHandicapIndex(differentials) {
   return index;
 }
 
+// Scoring breakdown: count eagles, birdies, pars, bogeys, doubles, worse
+export function calcScorecardBreakdown(grossScores, holes) {
+  let eagles = 0, birdies = 0, pars = 0, bogeys = 0, doubles = 0, worse = 0;
+  grossScores.forEach((g, i) => {
+    if (!g || !holes[i]) return;
+    const d = g - holes[i].par;
+    if (d <= -2) eagles++;
+    else if (d === -1) birdies++;
+    else if (d === 0) pars++;
+    else if (d === 1) bogeys++;
+    else if (d === 2) doubles++;
+    else worse++;
+  });
+  return { eagles, birdies, pars, bogeys, doubles, worse };
+}
+
 // Partition rounds into first and second halves for split-season tracking
 export function partitionRoundsByHalf(rounds, breakpoint) {
   const sorted = [...rounds].sort((a, b) => new Date(a.date) - new Date(b.date));
