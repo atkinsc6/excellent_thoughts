@@ -1,11 +1,11 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ClipboardList, Trophy, Users2, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Trophy, Users2, CalendarDays, Award } from 'lucide-react';
 
 const NAV_ITEMS = [
   { path: '/',            icon: LayoutDashboard, label: 'Home' },
   { path: '/scorecard',   icon: ClipboardList,   label: 'Score' },
   { path: '/leaderboard', icon: Trophy,           label: 'Board' },
-  { path: '/teams',       icon: Users2,           label: 'Teams' },
+  { path: '/awards',      icon: Award,            label: 'Awards' },
   { path: '/schedule',    icon: CalendarDays,     label: 'Schedule' },
 ];
 

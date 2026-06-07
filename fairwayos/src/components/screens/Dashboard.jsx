@@ -2,12 +2,13 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Trophy, TrendingDown, DollarSign, Target, CalendarDays, Medal, Users2 } from 'lucide-react';
+import { Trophy, TrendingDown, DollarSign, Target, CalendarDays, Medal, Users2, Award } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { useHandicap } from '../../hooks/useHandicap';
 import { seasonSkinsTotals } from '../../utils/skins';
 import { partitionRoundsByHalf } from '../../utils/scoring';
+import { calcSeasonAwards } from '../../utils/awards';
 
 const PLAYER_COLORS = ['#1B4332','#B8972A','#2D6A4F','#DC2626','#7C3AED','#0284C7','#D97706','#059669'];
 
@@ -114,6 +115,8 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
 
   const firstHalfStandings = useMemo(() => buildHalfStandings(firstHalf), [firstHalf, players, league]);
   const secondHalfStandings = useMemo(() => buildHalfStandings(secondHalf), [secondHalf, players, league]);
+
+  const awards = useMemo(() => calcSeasonAwards(players, rounds, courses, league), [players, rounds, courses, league]);
 
   // Recent round
   const recentRound = useMemo(() => {
@@ -309,6 +312,13 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
                       <Badge variant="accent">{nextEvent.format.replace('_', ' ')}</Badge>
                     </div>
                   )}
+                  {nextEvent.groups?.length > 0 && (
+                    <div className="mt-2">
+                      <Link to={`/teesheet/${nextEvent.id}`} className="text-xs font-medium" style={{ color: 'var(--color-accent)' }}>
+                        View Tee Sheet →
+                      </Link>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -468,6 +478,35 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
             </Card>
           </div>
         </div>
+        {/* Awards Preview */}
+        {awards.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award size={16} style={{ color: 'var(--color-accent)' }} />
+                  <CardTitle>Awards Preview</CardTitle>
+                </div>
+                <Link to="/awards" className="text-xs font-medium" style={{ color: 'var(--color-accent)' }}>
+                  View All →
+                </Link>
+              </div>
+            </CardHeader>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+              {awards.slice(0, 3).map(award => (
+                <div key={award.id} className="flex items-center gap-3 p-3 rounded-lg" style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+                  <span className="text-2xl flex-shrink-0">{award.icon}</span>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold truncate" style={{ color: 'var(--color-muted)' }}>{award.title}</div>
+                    <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{award.winnerName}</div>
+                    <div className="text-xs font-bold" style={{ color: 'var(--color-accent)' }}>{award.value}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         {/* Season Halves */}
         {league?.splitIntoHalves && (
           <Card>
