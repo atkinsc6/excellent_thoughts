@@ -32,7 +32,7 @@ export function Payouts({ league, players, rounds, courses }) {
         skinsAmount += skinsInRound * skinsEntry * r.playerIds.length;
       });
 
-      const ctpAmount = ctpWins * 5;
+      const ctpAmount = ctpWins * (league?.ctpEntry ?? 5);
       const total = skinsAmount + ctpAmount;
 
       return {

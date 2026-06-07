@@ -4,7 +4,6 @@ import { useLeague } from './hooks/useLeague';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileNav } from './components/layout/MobileNav';
 import { Dashboard } from './components/screens/Dashboard';
-import { ScorecardEntry } from './components/screens/ScorecardEntry';
 import { RoundWizard } from './components/screens/RoundWizard';
 import { Leaderboard } from './components/screens/Leaderboard';
 import { SkinsTracker } from './components/screens/SkinsTracker';

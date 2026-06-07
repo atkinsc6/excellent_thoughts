@@ -151,9 +151,11 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
     }).sort((a, b) => b.wins - a.wins || a.avgNet - b.avgNet);
   }, [teams, rounds]);
 
-  // Upcoming event
-  const today = new Date();
-  const nextRoundDate = new Date('2025-07-12');
+  // Upcoming event — derived from schedule
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const nextEvent = useMemo(() =>
+    [...(schedule || [])].filter(e => e.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date))[0] || null
+  , [schedule, todayStr]);
 
   const statCards = [
     {
@@ -253,25 +255,39 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
             <CardHeader>
               <CardTitle>Next Event</CardTitle>
             </CardHeader>
-            <div className="flex items-start gap-4 mt-2">
-              <div className="rounded-xl p-3 flex-shrink-0" style={{ backgroundColor: 'rgba(27,67,50,0.08)' }}>
-                <CalendarDays size={24} style={{ color: 'var(--color-primary)' }} />
+            {nextEvent ? (
+              <div className="flex items-start gap-4 mt-2">
+                <div className="rounded-xl p-3 flex-shrink-0" style={{ backgroundColor: 'rgba(27,67,50,0.08)' }}>
+                  <CalendarDays size={24} style={{ color: 'var(--color-primary)' }} />
+                </div>
+                <div>
+                  <div className="font-semibold text-base" style={{ color: 'var(--color-text)', fontFamily: 'Cormorant Garamond, serif' }}>
+                    {nextEvent.name}
+                  </div>
+                  <div className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    {format(parseISO(nextEvent.date), 'MMMM d, yyyy')}
+                  </div>
+                  {nextEvent.courseId && (
+                    <div className="text-sm mt-1" style={{ color: 'var(--color-text)' }}>
+                      {courses.find(c => c.id === nextEvent.courseId)?.name || ''}
+                    </div>
+                  )}
+                  {nextEvent.notes && (
+                    <div className="mt-1 text-xs" style={{ color: 'var(--color-muted)' }}>{nextEvent.notes}</div>
+                  )}
+                  {nextEvent.format && nextEvent.format !== 'individual' && (
+                    <div className="mt-2">
+                      <Badge variant="accent">{nextEvent.format.replace('_', ' ')}</Badge>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <div className="font-semibold text-base" style={{ color: 'var(--color-text)', fontFamily: 'Cormorant Garamond, serif' }}>
-                  Round 7
-                </div>
-                <div className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                  July 12, 2025
-                </div>
-                <div className="text-sm mt-1" style={{ color: 'var(--color-text)' }}>
-                  Cog Hill Golf &amp; Country Club
-                </div>
-                <div className="mt-2">
-                  <Badge variant="accent">Dubsdread</Badge>
-                </div>
+            ) : (
+              <div className="flex items-center gap-3 mt-4 text-sm" style={{ color: 'var(--color-muted)' }}>
+                <CalendarDays size={20} style={{ opacity: 0.4 }} />
+                No upcoming events. Add one in Schedule.
               </div>
-            </div>
+            )}
           </Card>
 
           {/* Handicap Trend */}
