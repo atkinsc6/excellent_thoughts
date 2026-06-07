@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { Save, Settings } from 'lucide-react';
+import { Save, Settings, Unlock, RefreshCw, Download, Trash2, AlertTriangle } from 'lucide-react';
 import { TopBar } from '../layout/TopBar';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
+import { logActivity, ACTIVITY_TYPES } from '../../utils/activity';
 
-export function LeagueSettings({ league, setLeague }) {
+export function LeagueSettings({ league, setLeague, rounds, setRounds, players, setPlayers, refreshActivity }) {
   const [form, setForm] = useState({ ...league });
   const [saved, setSaved] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState(false);
 
   const update = (field, value) => setForm(f => ({ ...f, [field]: value }));
 
@@ -24,8 +26,37 @@ export function LeagueSettings({ league, setLeague }) {
 
   const save = () => {
     setLeague(form);
+    logActivity(league?.id, ACTIVITY_TYPES.SETTINGS_UPDATED, 'League settings updated');
+    refreshActivity?.();
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+  };
+
+  const unlockLastRound = () => {
+    if (!rounds.length) return;
+    const sorted = [...rounds].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const last = sorted[0];
+    setRounds(prev => prev.map(r => r.id === last.id ? { ...r, finalized: false, finalizedAt: null } : r));
+    logActivity(league?.id, ACTIVITY_TYPES.ROUND_UNLOCKED, `Round unlocked for editing`);
+    refreshActivity?.();
+  };
+
+  const exportData = () => {
+    const data = { league, players, rounds };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fairwayos-${league?.name?.replace(/\s+/g, '-').toLowerCase() || 'export'}-${new Date().getFullYear()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const resetSeason = () => {
+    setRounds([]);
+    setResetConfirm(false);
+    logActivity(league?.id, ACTIVITY_TYPES.SETTINGS_UPDATED, 'Season data reset by commissioner');
+    refreshActivity?.();
   };
 
   const Section = ({ title, children }) => (
@@ -236,6 +267,131 @@ export function LeagueSettings({ league, setLeague }) {
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>pts</span>
               </div>
             ))}
+          </div>
+        </Section>
+
+        {/* Scoring Rules */}
+        <Section title="Scoring Rules">
+          <RadioGroup
+            label="Score Entry Permission"
+            value={form.scoreEntryPermission || 'all'}
+            onChange={v => update('scoreEntryPermission', v)}
+            options={[
+              { value: 'all', label: 'All Members' },
+              { value: 'commissioner', label: 'Commissioner Only' },
+            ]}
+          />
+          <RadioGroup
+            label="Scoring Mode"
+            value={form.scoringMode || 'individual'}
+            onChange={v => update('scoringMode', v)}
+            options={[
+              { value: 'individual', label: 'Individual' },
+              { value: 'team', label: 'Team' },
+            ]}
+          />
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Team Size</label>
+            <input type="number" min="1" max="6" value={form.teamSize || 2}
+              onChange={e => update('teamSize', parseInt(e.target.value) || 2)}
+              className="w-24 px-3 py-2 rounded-lg border text-sm"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-surface)' }} />
+          </div>
+          <RadioGroup
+            label="Team Structure"
+            value={form.teamStructure || 'fixed'}
+            onChange={v => update('teamStructure', v)}
+            options={[
+              { value: 'fixed', label: 'Fixed Teams' },
+              { value: 'random', label: 'Random Each Round' },
+            ]}
+          />
+          <Toggle
+            label="Allow Ties"
+            checked={form.allowTies !== false}
+            onChange={v => update('allowTies', v)}
+            description="Allow tied scores in standings; otherwise use tiebreaker"
+          />
+          <RadioGroup
+            label="Tiebreaker"
+            value={form.tiebreaker || 'card_playoff'}
+            onChange={v => update('tiebreaker', v)}
+            options={[
+              { value: 'card_playoff', label: 'Card Playoff' },
+              { value: 'sudden_death', label: 'Sudden Death' },
+              { value: 'none', label: 'None' },
+            ]}
+          />
+          <RadioGroup
+            label="Score Visibility"
+            value={form.scoreVisibility || 'public'}
+            onChange={v => update('scoreVisibility', v)}
+            options={[
+              { value: 'public', label: 'Public' },
+              { value: 'members', label: 'Members Only' },
+              { value: 'commissioner', label: 'Commissioner Only' },
+            ]}
+          />
+        </Section>
+
+        {/* Commissioner Tools */}
+        <Section title="Commissioner Tools">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+              <div>
+                <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Unlock Last Round</div>
+                <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Remove the finalized lock from the most recent round to allow edits</div>
+              </div>
+              <button onClick={unlockLastRound}
+                disabled={!rounds.length}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-40"
+                style={{ backgroundColor: 'var(--color-primary)' }}>
+                <Unlock size={13} /> Unlock
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+              <div>
+                <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Export League Data</div>
+                <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Download all league data as a JSON backup file</div>
+              </div>
+              <button onClick={exportData}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white"
+                style={{ backgroundColor: 'var(--color-accent)' }}>
+                <Download size={13} /> Export
+              </button>
+            </div>
+
+            <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-danger)', backgroundColor: 'rgba(220,38,38,0.03)' }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--color-danger)' }}>
+                    <AlertTriangle size={14} /> Reset Season Data
+                  </div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Permanently delete all rounds for this season. This cannot be undone.</div>
+                </div>
+                {!resetConfirm ? (
+                  <button onClick={() => setResetConfirm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white"
+                    style={{ backgroundColor: 'var(--color-danger)' }}>
+                    <Trash2 size={13} /> Reset
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={() => setResetConfirm(false)}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium border"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                      Cancel
+                    </button>
+                    <button onClick={resetSeason}
+                      className="px-3 py-1.5 rounded-lg text-sm font-bold text-white"
+                      style={{ backgroundColor: 'var(--color-danger)' }}>
+                      Confirm Reset
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </Section>
 
