@@ -16,6 +16,7 @@ import { Teams } from './components/screens/Teams';
 import { PlayerProfile } from './components/screens/PlayerProfile';
 import { Schedule } from './components/screens/Schedule';
 import { Payouts } from './components/screens/Payouts';
+import { RoundViewer } from './components/screens/RoundViewer';
 import { Login } from './components/screens/Login';
 
 function AppShell() {
@@ -72,6 +73,7 @@ function AppShell() {
           <Route path="/teams" element={<Teams {...sharedProps} />} />
           <Route path="/profile/:playerId" element={<PlayerProfile {...sharedProps} />} />
           <Route path="/schedule" element={<Schedule {...sharedProps} />} />
+          <Route path="/round/:roundId" element={<RoundViewer {...sharedProps} />} />
           <Route path="/payouts" element={<Payouts {...sharedProps} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

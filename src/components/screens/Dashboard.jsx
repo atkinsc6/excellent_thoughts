@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Trophy, TrendingDown, DollarSign, Target, CalendarDays, Medal, Users2 } from 'lucide-react';
@@ -247,7 +248,11 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
             <Card className="lg:col-span-1">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Most Recent Round</CardTitle>
+                  <Link to={`/round/${recentRound.id}`} style={{ textDecoration: 'none' }}>
+                    <CardTitle style={{ textDecoration: 'underline', textDecorationColor: 'var(--color-border)', cursor: 'pointer' }}>
+                      Most Recent Round
+                    </CardTitle>
+                  </Link>
                   <Badge variant="default">{format(parseISO(recentRound.date), 'MMM d')}</Badge>
                 </div>
                 <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{recentRound.courseName}</p>
