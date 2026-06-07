@@ -24,6 +24,7 @@ function AppShell() {
   const leagueData = useLeague(user ? activeLeagueId : null);
   const { league, setLeague, players, setPlayers, rounds, setRounds, courses, setCourses,
           teams, setTeams, activity, setActivity, refreshActivity, schedule, setSchedule,
+          archives, setArchives,
           getNotifReadAt, markNotifsRead, loading: leagueLoading } = leagueData;
 
   if (authLoading) {
@@ -53,6 +54,7 @@ function AppShell() {
   const sharedProps = {
     league, setLeague, players, setPlayers, rounds, setRounds, courses, setCourses,
     teams, setTeams, activity, setActivity, refreshActivity, schedule, setSchedule,
+    archives, setArchives,
     getNotifReadAt, markNotifsRead,
   };
 
