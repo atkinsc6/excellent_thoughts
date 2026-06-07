@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Save, Settings, Unlock, RefreshCw, Download, Trash2, AlertTriangle, Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { Save, Settings, Unlock, RefreshCw, Download, Trash2, AlertTriangle, Archive, ChevronDown, ChevronRight, Plus, X } from 'lucide-react';
 import { TopBar } from '../layout/TopBar';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -11,8 +11,16 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
   const [form, setForm] = useState({ ...league });
   const [saved, setSaved] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
-  const [archiveConfirm, setArchiveConfirm] = useState(false);
   const [expandedArchive, setExpandedArchive] = useState(null);
+
+  // Season Transition Wizard state
+  const [wizardStep, setWizardStep] = useState(null); // null | 0 | 1 | 2
+  const [newSeasonForm, setNewSeasonForm] = useState({
+    season: String(parseInt(league?.season || new Date().getFullYear()) + 1),
+    startDate: '',
+    endDate: '',
+    carryHandicaps: true,
+  });
 
   const update = (field, value) => setForm(f => ({ ...f, [field]: value }));
 
@@ -105,10 +113,35 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
 
     setArchives(prev => [snapshot, ...(prev || [])]);
     setRounds([]);
-    setArchiveConfirm(false);
     logActivity(league?.id, ACTIVITY_TYPES.SETTINGS_UPDATED, `Season ${snapshot.season} archived`);
     refreshActivity?.();
   };
+
+  const launchNewSeason = () => {
+    // Archive current season first
+    archiveSeason();
+    // Update league to new season
+    setLeague(prev => ({
+      ...prev,
+      season: newSeasonForm.season,
+      startDate: newSeasonForm.startDate || prev.startDate,
+      endDate: newSeasonForm.endDate || prev.endDate,
+    }));
+    // Optionally clear handicap differentials
+    if (!newSeasonForm.carryHandicaps) {
+      setPlayers(prev => prev.map(p => ({ ...p, differentials: [] })));
+    }
+    setWizardStep(null);
+    logActivity(league?.id, ACTIVITY_TYPES.SETTINGS_UPDATED, `New season ${newSeasonForm.season} started`);
+    refreshActivity?.();
+  };
+
+  const addFlight = () => {
+    const flights = form.flights || [];
+    update('flights', [...flights, { id: `f${Date.now()}`, label: `Flight ${String.fromCharCode(65 + flights.length)}`, minHandicap: null, maxHandicap: null }]);
+  };
+  const removeFlight = (idx) => update('flights', (form.flights || []).filter((_, i) => i !== idx));
+  const updateFlight = (idx, field, val) => update('flights', (form.flights || []).map((f, i) => i === idx ? { ...f, [field]: val } : f));
 
   const Section = ({ title, children }) => (
     <Card>
@@ -340,6 +373,60 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
           </div>
         </Section>
 
+        {/* Handicap Flights */}
+        <Section title="Handicap Flights">
+          <Toggle
+            label="Enable flights"
+            checked={!!form.flightsEnabled}
+            onChange={v => update('flightsEnabled', v)}
+            description="Split standings into A/B/C flights by handicap range"
+          />
+          {form.flightsEnabled && (
+            <div className="space-y-2 pt-1">
+              {(form.flights || []).map((flight, fi) => (
+                <div key={flight.id} className="flex items-center gap-2 p-2.5 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+                  <input
+                    value={flight.label}
+                    onChange={e => updateFlight(fi, 'label', e.target.value)}
+                    placeholder="Flight name"
+                    className="flex-1 px-2 py-1 rounded border text-sm font-medium"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>HCP</span>
+                  <input
+                    type="number"
+                    value={flight.minHandicap ?? ''}
+                    onChange={e => updateFlight(fi, 'minHandicap', e.target.value !== '' ? parseInt(e.target.value) : null)}
+                    placeholder="Min"
+                    className="w-14 px-1 py-1 rounded border text-xs text-center"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>—</span>
+                  <input
+                    type="number"
+                    value={flight.maxHandicap ?? ''}
+                    onChange={e => updateFlight(fi, 'maxHandicap', e.target.value !== '' ? parseInt(e.target.value) : null)}
+                    placeholder="Max"
+                    className="w-14 px-1 py-1 rounded border text-xs text-center"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                  <button onClick={() => removeFlight(fi)}><X size={13} style={{ color: 'var(--color-muted)' }} /></button>
+                </div>
+              ))}
+              <button onClick={addFlight}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+                <Plus size={12} /> Add Flight
+              </button>
+              {(form.flights?.length ?? 0) > 0 && (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                  Leave Min/Max blank to include all remaining players in the last flight.
+                </p>
+              )}
+            </div>
+          )}
+        </Section>
+
         {/* Season Structure */}
         <Section title="Season Structure">
           <Toggle
@@ -479,38 +566,21 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
               </button>
             </div>
 
-            {rounds.length > 0 && (
-              <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-accent)', backgroundColor: 'rgba(184,151,42,0.03)' }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
-                      <Archive size={14} style={{ color: 'var(--color-accent)' }} /> Archive Season
-                    </div>
-                    <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Snapshot standings and clear rounds to start a new season</div>
+            <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-accent)', backgroundColor: 'rgba(184,151,42,0.03)' }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
+                    <Archive size={14} style={{ color: 'var(--color-accent)' }} /> New Season
                   </div>
-                  {!archiveConfirm ? (
-                    <button onClick={() => setArchiveConfirm(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white"
-                      style={{ backgroundColor: 'var(--color-accent)' }}>
-                      <Archive size={13} /> Archive
-                    </button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => setArchiveConfirm(false)}
-                        className="px-3 py-1.5 rounded-lg text-sm font-medium border"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-                        Cancel
-                      </button>
-                      <button onClick={archiveSeason}
-                        className="px-3 py-1.5 rounded-lg text-sm font-bold text-white"
-                        style={{ backgroundColor: 'var(--color-accent)' }}>
-                        Confirm Archive
-                      </button>
-                    </div>
-                  )}
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Archive current season and start a fresh one</div>
                 </div>
+                <button onClick={() => setWizardStep(0)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white"
+                  style={{ backgroundColor: 'var(--color-accent)' }}>
+                  <Archive size={13} /> Start New Season
+                </button>
               </div>
-            )}
+            </div>
 
             <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-danger)', backgroundColor: 'rgba(220,38,38,0.03)' }}>
               <div className="flex items-center justify-between">
@@ -623,6 +693,167 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
           </Button>
         </div>
       </div>
+
+      {/* Season Transition Wizard Modal */}
+      {wizardStep !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="w-full max-w-lg rounded-2xl shadow-xl overflow-hidden" style={{ backgroundColor: 'var(--color-surface)' }}>
+            {/* Wizard header */}
+            <div className="px-6 py-4 flex items-center justify-between" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>
+              <div>
+                <div className="font-bold text-lg" style={{ fontFamily: 'Cormorant Garamond, serif' }}>New Season Wizard</div>
+                <div className="text-xs opacity-70">Step {wizardStep + 1} of 3</div>
+              </div>
+              <button onClick={() => setWizardStep(null)} className="opacity-60 hover:opacity-100">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Step progress */}
+            <div className="flex h-1">
+              {[0, 1, 2].map(s => (
+                <div key={s} className="flex-1 transition-all" style={{ backgroundColor: s <= wizardStep ? 'var(--color-accent)' : 'var(--color-border)' }} />
+              ))}
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Step 0: Season Recap */}
+              {wizardStep === 0 && (
+                <>
+                  <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Season {league?.season} Recap</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: 'Total Rounds', value: rounds.length },
+                      { label: 'Players', value: players.length },
+                    ].map(s => (
+                      <div key={s.label} className="p-3 rounded-lg border text-center" style={{ borderColor: 'var(--color-border)' }}>
+                        <div className="text-2xl font-bold" style={{ fontFamily: 'Cormorant Garamond, serif', color: 'var(--color-primary)' }}>{s.value}</div>
+                        <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {rounds.length === 0 && (
+                    <p className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: 'rgba(220,38,38,0.08)', color: 'var(--color-danger)' }}>
+                      No rounds to archive. You can still start a new season to update the season year and dates.
+                    </p>
+                  )}
+                  <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                    Current standings will be archived as a season snapshot. You'll set up the new season on the next step.
+                  </p>
+                </>
+              )}
+
+              {/* Step 1: New Season Config */}
+              {wizardStep === 1 && (
+                <>
+                  <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New Season Settings</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Season Name / Year</label>
+                      <input
+                        value={newSeasonForm.season}
+                        onChange={e => setNewSeasonForm(f => ({ ...f, season: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border text-sm"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        placeholder="2026"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Start Date</label>
+                        <input
+                          type="date"
+                          value={newSeasonForm.startDate}
+                          onChange={e => setNewSeasonForm(f => ({ ...f, startDate: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg border text-sm"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>End Date</label>
+                        <input
+                          type="date"
+                          value={newSeasonForm.endDate}
+                          onChange={e => setNewSeasonForm(f => ({ ...f, endDate: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg border text-sm"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+                      <div>
+                        <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Carry handicap history</div>
+                        <div className="text-xs" style={{ color: 'var(--color-muted)' }}>Keep WHS differentials from this season</div>
+                      </div>
+                      <button
+                        onClick={() => setNewSeasonForm(f => ({ ...f, carryHandicaps: !f.carryHandicaps }))}
+                        className="flex-shrink-0 w-10 h-6 rounded-full transition-all relative"
+                        style={{ backgroundColor: newSeasonForm.carryHandicaps ? 'var(--color-primary)' : 'var(--color-border)' }}
+                      >
+                        <span className="absolute top-1 w-4 h-4 rounded-full transition-all"
+                          style={{ backgroundColor: 'white', left: newSeasonForm.carryHandicaps ? '22px' : '2px' }} />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Step 2: Confirm */}
+              {wizardStep === 2 && (
+                <>
+                  <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Confirm & Launch</h3>
+                  <div className="space-y-2 text-sm" style={{ color: 'var(--color-text)' }}>
+                    <div className="flex items-start gap-2 py-1.5 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                      <span style={{ color: 'var(--color-muted)', minWidth: '120px' }}>Archive season</span>
+                      <span className="font-medium">{league?.season} ({rounds.length} rounds)</span>
+                    </div>
+                    <div className="flex items-start gap-2 py-1.5 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                      <span style={{ color: 'var(--color-muted)', minWidth: '120px' }}>New season</span>
+                      <span className="font-medium">{newSeasonForm.season}</span>
+                    </div>
+                    <div className="flex items-start gap-2 py-1.5 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                      <span style={{ color: 'var(--color-muted)', minWidth: '120px' }}>Handicap history</span>
+                      <span className="font-medium">{newSeasonForm.carryHandicaps ? 'Carried forward' : 'Cleared'}</span>
+                    </div>
+                    <div className="flex items-start gap-2 py-1.5">
+                      <span style={{ color: 'var(--color-muted)', minWidth: '120px' }}>Rounds cleared</span>
+                      <span className="font-medium">Yes — all {rounds.length} rounds removed</span>
+                    </div>
+                  </div>
+                  <p className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: 'rgba(220,38,38,0.08)', color: 'var(--color-danger)' }}>
+                    This cannot be undone. The current season will be archived and rounds will be cleared.
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* Wizard footer */}
+            <div className="px-6 py-4 flex justify-between border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <button
+                onClick={() => wizardStep === 0 ? setWizardStep(null) : setWizardStep(s => s - 1)}
+                className="px-4 py-2 rounded-lg text-sm font-medium border"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                {wizardStep === 0 ? 'Cancel' : 'Back'}
+              </button>
+              {wizardStep < 2 ? (
+                <button
+                  onClick={() => setWizardStep(s => s + 1)}
+                  className="px-5 py-2 rounded-lg text-sm font-medium text-white"
+                  style={{ backgroundColor: 'var(--color-primary)' }}>
+                  Next →
+                </button>
+              ) : (
+                <button
+                  onClick={launchNewSeason}
+                  className="px-5 py-2 rounded-lg text-sm font-bold text-white"
+                  style={{ backgroundColor: 'var(--color-accent)' }}>
+                  🏌️ Launch New Season
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
