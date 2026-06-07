@@ -318,7 +318,118 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+            {/* ── Mobile: card-per-hole ── */}
+            <div className="block md:hidden space-y-2">
+              {Array.from({ length: 18 }, (_, i) => {
+                const hole = course.holes?.[i];
+                const holeNum = i + 1;
+                const isCtp = league?.ctpHoles?.includes(holeNum);
+                const skinsHole = skinsPreview[i];
+                return (
+                  <div key={i} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
+                    {/* Hole header */}
+                    <div className="flex items-center justify-between px-4 py-2.5"
+                      style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-bold">Hole {holeNum}</span>
+                        {isCtp && (
+                          <button
+                            onClick={() => {
+                              const current = ctpWinners[holeNum];
+                              const idx = selectedPlayers.findIndex(p => p.id === current);
+                              const next = selectedPlayers[(idx + 1) % selectedPlayers.length];
+                              setCtpWinners(prev => ({ ...prev, [holeNum]: next?.id || null }));
+                            }}
+                          >
+                            <Star size={14}
+                              style={{ color: ctpWinners[holeNum] ? 'var(--color-accent)' : 'rgba(255,255,255,0.5)' }}
+                              fill={ctpWinners[holeNum] ? 'var(--color-accent)' : 'none'}
+                            />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs font-medium opacity-80">
+                        <span>Par {hole?.par || 4}</span>
+                        <span>SI {hole?.strokeIndex || holeNum}</span>
+                        {skinsHole?.carryover && !skinsHole.winnerId && (
+                          <span className="px-1.5 py-0.5 rounded text-xs font-bold" style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary)' }}>
+                            Carry
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Player inputs */}
+                    <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                      {selectedPlayers.map(p => {
+                        const gross = grossScores[p.id]?.[i] || '';
+                        const netArr = getNetScores(p.id);
+                        const net = gross ? netArr[i] : null;
+                        const isSkinsWinner = skinsHole?.winnerId === p.id;
+                        return (
+                          <div key={p.id} className="flex items-center justify-between px-4 py-3"
+                            style={{ backgroundColor: isSkinsWinner ? 'rgba(22,163,74,0.06)' : 'transparent' }}>
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>
+                                {p.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{p.name.split(' ')[0]}</div>
+                                {net !== null && (
+                                  <div className="text-xs" style={{ color: net < (hole?.par || 4) ? '#16a34a' : net > (hole?.par || 4) ? 'var(--color-danger)' : 'var(--color-muted)' }}>
+                                    net {net}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isSkinsWinner && <span className="text-xs font-bold" style={{ color: '#16a34a' }}>Skin</span>}
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min="1"
+                                max="20"
+                                value={gross}
+                                onChange={e => setGross(p.id, i, e.target.value)}
+                                placeholder="—"
+                                className="w-14 h-12 text-center rounded-xl border text-xl font-bold font-mono"
+                                style={{
+                                  borderColor: isSkinsWinner ? '#16a34a' : 'var(--color-border)',
+                                  backgroundColor: isSkinsWinner ? 'rgba(22,163,74,0.08)' : 'var(--color-bg)',
+                                  color: 'var(--color-text)',
+                                  touchAction: 'manipulation',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Mobile running totals */}
+              <div className="sticky bottom-16 rounded-xl border shadow-lg overflow-hidden" style={{ borderColor: 'var(--color-primary)', backgroundColor: 'var(--color-primary)' }}>
+                <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white opacity-70">Running Totals</div>
+                <div className="grid gap-0 divide-x" style={{ gridTemplateColumns: `repeat(${selectedPlayers.length}, 1fr)`, borderColor: 'rgba(255,255,255,0.2)' }}>
+                  {selectedPlayers.map(p => {
+                    const grossTotal = (grossScores[p.id] || []).reduce((s, v) => s + (v || 0), 0);
+                    const netTotal = getNetScores(p.id).reduce((s, v) => s + v, 0);
+                    return (
+                      <div key={p.id} className="px-3 py-2 text-center">
+                        <div className="text-xs text-white opacity-60 truncate">{p.name.split(' ')[0]}</div>
+                        <div className="text-lg font-bold text-white">{grossTotal || '—'}</div>
+                        {grossTotal > 0 && <div className="text-xs opacity-60 text-white">net {netTotal}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Desktop: table ── */}
+            <div className="hidden md:block overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
               <table className="text-xs" style={{ minWidth: `${200 + selectedPlayers.length * 70}px` }}>
                 <thead>
                   <tr style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>
