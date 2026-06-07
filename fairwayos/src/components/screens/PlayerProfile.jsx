@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ArrowLeft, Trophy, TrendingDown, Medal, DollarSign, Target, Edit2, Trash2 } from 'lucide-react';
@@ -250,8 +250,10 @@ export function PlayerProfile({ league, players, setPlayers, rounds, courses, te
                 <tbody>
                   {roundHistory.map(row => (
                     <tr key={row.roundId} style={{ borderBottom: '1px solid var(--color-border)' }} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3" style={{ color: 'var(--color-text)' }}>
-                        {format(parseISO(row.date), 'MMM d, yyyy')}
+                      <td className="px-4 py-3">
+                        <Link to={`/round/${row.roundId}`} className="font-medium hover:underline" style={{ color: 'var(--color-primary)' }}>
+                          {format(parseISO(row.date), 'MMM d, yyyy')}
+                        </Link>
                       </td>
                       <td className="px-4 py-3" style={{ color: 'var(--color-muted)' }}>{row.courseName}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{row.gross ?? '—'}</td>

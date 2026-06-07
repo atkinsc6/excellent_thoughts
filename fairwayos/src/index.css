@@ -16,6 +16,11 @@
   --color-success: #16A34A;
 }
 
+@media print {
+  aside, nav, .no-print { display: none !important; }
+  body { background: white !important; }
+}
+
 * {
   box-sizing: border-box;
 }
