@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { ChevronRight, ChevronLeft, Check, Star, Trophy, DollarSign, Plus, X } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check, Star, Trophy, DollarSign, Plus, X, BarChart2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { useAuth } from '../../hooks/useAuth';
@@ -14,10 +14,81 @@ import {
   calcBetterBallTeamScore,
   calcScrambleHandicap,
   calcMatchPlay,
+  calcNassau,
 } from '../../utils/scoring';
 import { calcSkins, skinsSummary } from '../../utils/skins';
 import { logActivity, ACTIVITY_TYPES } from '../../utils/activity';
 import { MatchPlayScorecard } from './MatchPlayScorecard';
+
+// Per-player shot stats entry panel (GIR, fairways hit, putts)
+function StatsPanel({ players, course, stats, setStats }) {
+  const [activeId, setActiveId] = useState(players[0]?.id || '');
+  const active = stats[activeId] || { putts: Array(18).fill(0), gir: Array(18).fill(null), fh: Array(18).fill(null) };
+
+  function setStat(field, holeIdx, val) {
+    setStats(prev => {
+      const cur = prev[activeId] || { putts: Array(18).fill(0), gir: Array(18).fill(null), fh: Array(18).fill(null) };
+      const arr = [...cur[field]];
+      arr[holeIdx] = val;
+      return { ...prev, [activeId]: { ...cur, [field]: arr } };
+    });
+  }
+
+  return (
+    <div className="space-y-3 mt-3">
+      <div className="flex gap-2 flex-wrap">
+        {players.map(p => (
+          <button key={p.id} onClick={() => setActiveId(p.id)}
+            className="px-3 py-1 rounded-full text-xs font-medium transition-all"
+            style={{ backgroundColor: activeId === p.id ? 'var(--color-primary)' : 'transparent', color: activeId === p.id ? 'white' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+            {p.name.split(' ')[0]}
+          </button>
+        ))}
+      </div>
+      <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+        <table className="text-xs w-full" style={{ minWidth: '420px' }}>
+          <thead>
+            <tr style={{ backgroundColor: 'rgba(27,67,50,0.06)' }}>
+              <th className="px-3 py-2 text-left font-semibold" style={{ color: 'var(--color-muted)', minWidth: '40px' }}>Hole</th>
+              <th className="px-2 py-2 text-center font-semibold" style={{ color: 'var(--color-muted)' }}>Par</th>
+              <th className="px-3 py-2 text-center font-semibold" style={{ color: 'var(--color-muted)' }}>GIR</th>
+              <th className="px-3 py-2 text-center font-semibold" style={{ color: 'var(--color-muted)' }}>FH</th>
+              <th className="px-2 py-2 text-center font-semibold" style={{ color: 'var(--color-muted)' }}>Putts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 18 }, (_, i) => {
+              const hole = course?.holes?.[i];
+              const par = hole?.par ?? 4;
+              return (
+                <tr key={i} style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: i % 2 === 0 ? 'var(--color-surface)' : 'rgba(249,246,240,0.5)' }}>
+                  <td className="px-3 py-1.5 font-medium" style={{ color: 'var(--color-text)' }}>{i + 1}</td>
+                  <td className="px-2 py-1.5 text-center font-medium" style={{ color: 'var(--color-primary)' }}>{par}</td>
+                  <td className="px-3 py-1.5 text-center">
+                    <input type="checkbox" checked={!!active.gir[i]}
+                      onChange={e => setStat('gir', i, e.target.checked)} className="accent-green-700 w-4 h-4" />
+                  </td>
+                  <td className="px-3 py-1.5 text-center">
+                    {par !== 3
+                      ? <input type="checkbox" checked={!!active.fh[i]}
+                          onChange={e => setStat('fh', i, e.target.checked)} className="accent-green-700 w-4 h-4" />
+                      : <span style={{ color: 'var(--color-border)' }}>—</span>}
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    <input type="number" min="0" max="9" value={active.putts[i] || ''}
+                      onChange={e => setStat('putts', i, parseInt(e.target.value) || 0)}
+                      className="w-10 text-center rounded border py-0.5 text-xs font-mono"
+                      style={{ borderColor: 'var(--color-border)', backgroundColor: 'transparent', color: 'var(--color-text)' }} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 const FORMATS = [
   { value: 'individual', label: 'Individual Stroke Play' },
@@ -54,6 +125,16 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
   // Better ball / scramble team state
   const [teamPairings, setTeamPairings] = useState([]); // [{ id, label, playerIds }]
   const [scrambleTeamScores, setScrambleTeamScores] = useState({}); // { [teamId]: number[18] }
+
+  // Nassau side bets
+  const [nassauEnabled, setNassauEnabled] = useState(false);
+  const [nassauAmount, setNassauAmount] = useState(5);
+  const [nassauUseNet, setNassauUseNet] = useState(true);
+  const [nassauPairings, setNassauPairings] = useState([]); // [{ p1Id, p2Id }]
+
+  // Shot-level stats
+  const [statsEnabled, setStatsEnabled] = useState(false);
+  const [shotStats, setShotStats] = useState({}); // { [playerId]: { putts[], gir[], fh[] } }
 
   const course = useMemo(() => courses.find(c => c.id === selectedCourseId), [courses, selectedCourseId]);
   const selectedPlayers = useMemo(() => players.filter(p => selectedPlayerIds.includes(p.id)), [players, selectedPlayerIds]);
@@ -156,6 +237,7 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
       const grossArr = Array.from({ length: 18 }, (_, i) => grossScores[p.id]?.[i] || 0);
       const netArr = getNetScores(p.id);
       const sfArr = getStablefordPoints(p.id);
+      const pStats = shotStats[p.id];
       return {
         playerId: p.id,
         grossScores: grossArr,
@@ -165,6 +247,7 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
         totalGross: grossArr.reduce((s, v) => s + v, 0),
         totalNet: netArr.reduce((s, v) => s + v, 0),
         totalStableford: sfArr.reduce((s, v) => s + v, 0),
+        ...(statsEnabled && pStats ? { putts: pStats.putts, gir: pStats.gir, fairwaysHit: pStats.fh } : {}),
       };
     });
 
@@ -214,6 +297,20 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
 
     if (selectedFormat === 'individual') {
       round.skinsResults = skinsPreview.map(s => ({ hole: s.hole, winnerId: s.winnerId, carryover: s.carryover, gross: league?.skinsType === 'gross' }));
+    }
+
+    if (nassauEnabled && nassauPairings.length > 0) {
+      round.nassauResult = {
+        amount: nassauAmount,
+        useNet: nassauUseNet,
+        pairs: nassauPairings.filter(p => p.p1Id && p.p2Id).map(pair => {
+          const p1Score = scores.find(s => s.playerId === pair.p1Id);
+          const p2Score = scores.find(s => s.playerId === pair.p2Id);
+          const p1 = nassauUseNet ? (p1Score?.netScores || []) : (p1Score?.grossScores || []);
+          const p2 = nassauUseNet ? (p2Score?.netScores || []) : (p2Score?.grossScores || []);
+          return { player1Id: pair.p1Id, player2Id: pair.p2Id, ...calcNassau(p1, p2, nassauAmount) };
+        }),
+      };
     }
 
     return round;
@@ -470,6 +567,68 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
                 </div>
               )}
 
+              {/* Nassau side bet configuration */}
+              {selectedPlayers.length >= 2 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Nassau Side Bets</label>
+                    <button onClick={() => {
+                      setNassauEnabled(v => !v);
+                      if (!nassauEnabled && nassauPairings.length === 0) {
+                        const pairs = [];
+                        for (let i = 0; i < selectedPlayers.length - 1; i += 2) {
+                          if (selectedPlayers[i + 1]) pairs.push({ p1Id: selectedPlayers[i].id, p2Id: selectedPlayers[i + 1].id });
+                        }
+                        setNassauPairings(pairs);
+                      }
+                    }}
+                      className="text-xs px-2 py-1 rounded border transition-all"
+                      style={{ borderColor: nassauEnabled ? 'var(--color-accent)' : 'var(--color-border)', backgroundColor: nassauEnabled ? 'rgba(184,151,42,0.1)' : 'transparent', color: nassauEnabled ? 'var(--color-accent)' : 'var(--color-muted)' }}>
+                      {nassauEnabled ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                  {nassauEnabled && (
+                    <div className="space-y-2 p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs" style={{ color: 'var(--color-muted)' }}>$ per bet</label>
+                          <input type="number" min="1" max="1000" value={nassauAmount}
+                            onChange={e => setNassauAmount(parseInt(e.target.value) || 5)}
+                            className="w-16 px-2 py-1 rounded border text-xs text-center"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                        </div>
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                          <input type="checkbox" checked={nassauUseNet} onChange={e => setNassauUseNet(e.target.checked)} className="rounded" />
+                          Use net scores
+                        </label>
+                      </div>
+                      <div className="space-y-2">
+                        {nassauPairings.map((pair, pi) => (
+                          <div key={pi} className="flex items-center gap-2">
+                            <select value={pair.p1Id} onChange={e => setNassauPairings(prev => prev.map((p, i) => i === pi ? { ...p, p1Id: e.target.value } : p))}
+                              className="flex-1 px-2 py-1 rounded border text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                              <option value="">Select…</option>
+                              {selectedPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                            <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>vs</span>
+                            <select value={pair.p2Id} onChange={e => setNassauPairings(prev => prev.map((p, i) => i === pi ? { ...p, p2Id: e.target.value } : p))}
+                              className="flex-1 px-2 py-1 rounded border text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                              <option value="">Select…</option>
+                              {selectedPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                            <button onClick={() => setNassauPairings(prev => prev.filter((_, i) => i !== pi))}><X size={13} style={{ color: 'var(--color-muted)' }} /></button>
+                          </div>
+                        ))}
+                        <button onClick={() => setNassauPairings(prev => [...prev, { p1Id: '', p2Id: '' }])}
+                          className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-primary)' }}>
+                          <Plus size={11} /> Add match
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex justify-end">
                 <button onClick={() => setStep(1)} disabled={!selectedCourseId || selectedPlayerIds.length === 0}
                   className="px-5 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2 disabled:opacity-40"
@@ -484,11 +643,16 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
         {/* Step 2: Scorecard */}
         {step === 1 && course && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
                 <div className="font-semibold" style={{ color: 'var(--color-text)', fontFamily: 'Cormorant Garamond, serif', fontSize: '18px' }}>{course.name}</div>
                 <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{selectedDate} · {selectedPlayers.length} players · {FORMATS.find(f => f.value === selectedFormat)?.label}</div>
               </div>
+              <button onClick={() => setStatsEnabled(v => !v)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                style={{ borderColor: statsEnabled ? 'var(--color-accent)' : 'var(--color-border)', backgroundColor: statsEnabled ? 'rgba(184,151,42,0.1)' : 'transparent', color: statsEnabled ? 'var(--color-accent)' : 'var(--color-muted)' }}>
+                <BarChart2 size={12} /> Track Stats
+              </button>
             </div>
 
             {/* Match Play scorecard */}
@@ -771,6 +935,14 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
               </Card>
             )}
 
+            {/* Shot stats panel */}
+            {statsEnabled && (
+              <Card>
+                <CardHeader><CardTitle>Shot Stats</CardTitle></CardHeader>
+                <StatsPanel players={selectedPlayers} course={course} stats={shotStats} setStats={setShotStats} />
+              </Card>
+            )}
+
             {!isMatchFormat && !isScramble && selectedPlayers.some(p => !(grossScores[p.id] || []).some(s => s > 0)) && (
               <div className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: 'rgba(184,151,42,0.1)', color: 'var(--color-accent)', border: '1px solid rgba(184,151,42,0.3)' }}>
                 Some players have no scores entered. You can still review, but totals will be incomplete.
@@ -917,6 +1089,55 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
                 </div>
               )}
             </Card>
+
+            {/* Nassau results in Step 3 */}
+            {nassauEnabled && nassauPairings.some(p => p.p1Id && p.p2Id) && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <DollarSign size={16} style={{ color: 'var(--color-accent)' }} />
+                    <CardTitle>Nassau Results — ${nassauAmount}/bet · {nassauUseNet ? 'Net' : 'Gross'}</CardTitle>
+                  </div>
+                </CardHeader>
+                <div className="space-y-3 mt-3">
+                  {nassauPairings.filter(p => p.p1Id && p.p2Id).map((pair, pi) => {
+                    const p1 = players.find(pl => pl.id === pair.p1Id);
+                    const p2 = players.find(pl => pl.id === pair.p2Id);
+                    const p1Scores = nassauUseNet ? getNetScores(pair.p1Id) : Array.from({ length: 18 }, (_, i) => grossScores[pair.p1Id]?.[i] || 0);
+                    const p2Scores = nassauUseNet ? getNetScores(pair.p2Id) : Array.from({ length: 18 }, (_, i) => grossScores[pair.p2Id]?.[i] || 0);
+                    const result = calcNassau(p1Scores, p2Scores, nassauAmount);
+                    const betLabel = (bet, p1Name, p2Name) => {
+                      if (!bet.winner) return '—';
+                      if (bet.winner === 'tied') return 'Halved';
+                      return `${bet.winner === 'player1' ? p1Name : p2Name} wins`;
+                    };
+                    const p1Name = p1?.name?.split(' ')[0] || '?';
+                    const p2Name = p2?.name?.split(' ')[0] || '?';
+                    return (
+                      <div key={pi} className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{p1Name} vs {p2Name}</span>
+                          <span className="text-sm font-bold" style={{ color: result.p1Winnings > 0 ? '#16a34a' : result.p1Winnings < 0 ? 'var(--color-danger)' : 'var(--color-muted)' }}>
+                            {result.p1Winnings > 0 ? `${p1Name} +$${result.p1Winnings}` : result.p1Winnings < 0 ? `${p2Name} +$${-result.p1Winnings}` : 'Even'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          {[['Front 9', result.front], ['Back 9', result.back], ['Overall', result.overall]].map(([label, bet]) => (
+                            <div key={label} className="rounded-lg py-2 px-1" style={{ backgroundColor: 'rgba(27,67,50,0.04)', border: '1px solid var(--color-border)' }}>
+                              <div className="text-xs font-semibold mb-0.5" style={{ color: 'var(--color-muted)' }}>{label}</div>
+                              <div className="text-xs font-medium" style={{ color: bet.winner === 'tied' || !bet.winner ? 'var(--color-muted)' : 'var(--color-primary)' }}>
+                                {betLabel(bet, p1Name, p2Name)}
+                              </div>
+                              {bet.s1 > 0 && <div className="text-xs opacity-60 mt-0.5" style={{ color: 'var(--color-muted)' }}>{bet.s1} – {bet.s2}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
 
             {Object.values(ctpWinners).some(Boolean) && (
               <Card>

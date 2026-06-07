@@ -162,6 +162,59 @@ export function partitionRoundsByHalf(rounds, breakpoint) {
   };
 }
 
+// Nassau side bet: compare front 9, back 9, and overall 18 for two players
+// p1Scores / p2Scores: 18-element arrays (net or gross); amount = $ per bet
+// Returns { front, back, overall, p1Winnings, p2Winnings }
+// Each segment: { winner: 'player1'|'player2'|'tied', margin: number }
+export function calcNassau(p1Scores, p2Scores, amount = 5) {
+  function seg(a, b) {
+    const s1 = a.reduce((s, v) => s + (v || 0), 0);
+    const s2 = b.reduce((s, v) => s + (v || 0), 0);
+    if (!s1 || !s2) return { winner: null, margin: 0, s1, s2 };
+    if (s1 < s2) return { winner: 'player1', margin: s2 - s1, s1, s2 };
+    if (s2 < s1) return { winner: 'player2', margin: s1 - s2, s1, s2 };
+    return { winner: 'tied', margin: 0, s1, s2 };
+  }
+  const front = seg(p1Scores.slice(0, 9), p2Scores.slice(0, 9));
+  const back = seg(p1Scores.slice(9, 18), p2Scores.slice(9, 18));
+  const overall = seg(p1Scores, p2Scores);
+  const p1Winnings = [front, back, overall].reduce((sum, bet) =>
+    sum + (bet.winner === 'player1' ? amount : bet.winner === 'player2' ? -amount : 0), 0);
+  return { front, back, overall, p1Winnings, p2Winnings: -p1Winnings };
+}
+
+// Aggregate shot-level stats (GIR, fairways hit, putts) from an array of PlayerScore objects
+// Returns { girPct, fhPct, avgPutts } — null if no data tracked
+export function aggregateStats(playerScores, holes) {
+  let girHit = 0, girHoles = 0, fhHit = 0, fhHoles = 0, puttsTotal = 0, puttsHoles = 0;
+  for (const ps of playerScores) {
+    for (let i = 0; i < 18; i++) {
+      const par = holes?.[i]?.par ?? 4;
+      if (ps.gir?.[i] != null) { girHit += ps.gir[i] ? 1 : 0; girHoles++; }
+      if (par !== 3 && ps.fairwaysHit?.[i] != null) { fhHit += ps.fairwaysHit[i] ? 1 : 0; fhHoles++; }
+      if ((ps.putts?.[i] ?? 0) > 0) { puttsTotal += ps.putts[i]; puttsHoles++; }
+    }
+  }
+  return {
+    girPct: girHoles > 0 ? Math.round((girHit / girHoles) * 100) : null,
+    fhPct: fhHoles > 0 ? Math.round((fhHit / fhHoles) * 100) : null,
+    avgPutts: puttsHoles > 0 ? +(puttsTotal / puttsHoles).toFixed(2) : null,
+    girHoles, fhHoles, puttsHoles,
+  };
+}
+
+// Assign a player to a flight based on their handicap index
+export function getPlayerFlight(player, flights = []) {
+  if (!flights.length) return null;
+  const hcp = player.handicapIndex ?? 0;
+  for (const flight of flights) {
+    const ok = (flight.minHandicap == null || hcp >= flight.minHandicap)
+             && (flight.maxHandicap == null || hcp <= flight.maxHandicap);
+    if (ok) return flight;
+  }
+  return flights[flights.length - 1];
+}
+
 // Adjusted gross score (Equitable Stroke Control)
 export function adjustedGross(grossScores, holes, playingHandicap) {
   const maxPerHole = (hcp) => {

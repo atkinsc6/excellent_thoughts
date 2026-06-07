@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { ArrowLeft, Trophy, TrendingDown, Medal, DollarSign, Target, Edit2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trophy, TrendingDown, Medal, DollarSign, Target, Edit2, Trash2, BarChart2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -11,6 +11,7 @@ import { Input } from '../ui/Input';
 import { useHandicap } from '../../hooks/useHandicap';
 import { useAuth } from '../../hooks/useAuth';
 import { seasonSkinsTotals } from '../../utils/skins';
+import { aggregateStats } from '../../utils/scoring';
 
 export function PlayerProfile({ league, players, setPlayers, rounds, courses, teams }) {
   const { playerId } = useParams();
@@ -46,6 +47,16 @@ export function PlayerProfile({ league, players, setPlayers, rounds, courses, te
       skinsWon: skinsTotals[playerId] || 0,
     };
   }, [playerRounds, playerId, skinsTotals]);
+
+  const shotStats = useMemo(() => {
+    const scorecards = playerRounds.map(r => {
+      const ps = r.scores?.find(s => s.playerId === playerId);
+      const course = courses.find(c => c.id === r.courseId);
+      return ps && (ps.gir || ps.putts || ps.fairwaysHit) ? { ...ps, _holes: course?.holes } : null;
+    }).filter(Boolean);
+    if (!scorecards.length) return null;
+    return aggregateStats(scorecards, scorecards[0]?._holes);
+  }, [playerRounds, playerId, courses]);
 
   const handicapTrend = useMemo(() => {
     const trend = getHandicapTrend(playerId);
@@ -284,6 +295,31 @@ export function PlayerProfile({ league, players, setPlayers, rounds, courses, te
             </div>
           )}
         </Card>
+
+        {/* Shot Stats */}
+        {shotStats && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <BarChart2 size={16} style={{ color: 'var(--color-accent)' }} />
+                <CardTitle>Shot Stats</CardTitle>
+              </div>
+            </CardHeader>
+            <div className="grid grid-cols-3 gap-4 mt-3">
+              {[
+                { label: 'GIR %', value: shotStats.girPct != null ? `${shotStats.girPct}%` : '—', color: shotStats.girPct != null ? (shotStats.girPct >= 50 ? '#16a34a' : shotStats.girPct >= 33 ? 'var(--color-accent)' : 'var(--color-danger)') : 'var(--color-muted)', sub: `${shotStats.girHoles} holes tracked` },
+                { label: 'FH %', value: shotStats.fhPct != null ? `${shotStats.fhPct}%` : '—', color: shotStats.fhPct != null ? (shotStats.fhPct >= 60 ? '#16a34a' : shotStats.fhPct >= 40 ? 'var(--color-accent)' : 'var(--color-danger)') : 'var(--color-muted)', sub: `${shotStats.fhHoles} holes tracked` },
+                { label: 'Putts/Hole', value: shotStats.avgPutts != null ? shotStats.avgPutts : '—', color: shotStats.avgPutts != null ? (shotStats.avgPutts <= 1.7 ? '#16a34a' : shotStats.avgPutts <= 2.0 ? 'var(--color-text)' : 'var(--color-danger)') : 'var(--color-muted)', sub: `${shotStats.puttsHoles} holes tracked` },
+              ].map(s => (
+                <div key={s.label} className="text-center p-3 rounded-lg" style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+                  <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-muted)' }}>{s.label}</div>
+                  <div className="text-2xl font-bold" style={{ fontFamily: 'Cormorant Garamond, serif', color: s.color }}>{s.value}</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{s.sub}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {h2hRecords.length > 0 && (
           <Card className="p-0 overflow-hidden">

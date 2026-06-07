@@ -1,15 +1,16 @@
 import { useState, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
-import { partitionRoundsByHalf } from '../../utils/scoring';
+import { partitionRoundsByHalf, aggregateStats, getPlayerFlight } from '../../utils/scoring';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TopBar } from '../layout/TopBar';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 
 export function Leaderboard({ players, rounds, courses, teams = [], league }) {
-  const [view, setView] = useState('season'); // 'season' | 'round' | 'teams'
+  const [view, setView] = useState('season'); // 'season' | 'round' | 'teams' | 'stats'
   const [selectedRoundId, setSelectedRoundId] = useState(rounds[rounds.length - 1]?.id || '');
   const [scoreType, setScoreType] = useState('net'); // 'gross' | 'net' | 'stableford'
+  const [activeFlight, setActiveFlight] = useState('all');
 
   const sortedRounds = useMemo(() => [...rounds].sort((a, b) => new Date(b.date) - new Date(a.date)), [rounds]);
 
@@ -125,7 +126,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
     }).sort((a, b) => b.wins - a.wins || a.avgNet - b.avgNet);
   }, [teams, rounds, players]);
 
-  const tableData = (view === 'season' || view === '1h' || view === '2h') ? seasonData : roundData;
+  const tableData = (view === 'season' || view === '1h' || view === '2h') ? filteredSeasonData : roundData;
   const selectedRound = rounds.find(r => r.id === selectedRoundId);
   const selectedCourse = selectedRound ? courses.find(c => c.id === selectedRound.courseId) : null;
 
@@ -152,6 +153,39 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
     return { lowGross, lowNet, totalBirdies, totalEagles };
   }, [players, activeRounds, courses]);
 
+  // Per-player shot stats aggregation across all rounds
+  const statsData = useMemo(() => {
+    return players.map(p => {
+      const pr = rounds.filter(r => r.playerIds.includes(p.id));
+      const statsRounds = pr.map(r => {
+        const ps = r.scores?.find(s => s.playerId === p.id);
+        const course = courses.find(c => c.id === r.courseId);
+        return ps && (ps.gir || ps.putts || ps.fairwaysHit) ? { ...ps, _holes: course?.holes } : null;
+      }).filter(Boolean);
+      const agg = aggregateStats(statsRounds, statsRounds[0]?._holes);
+      return {
+        id: p.id,
+        name: p.name,
+        handicapIndex: p.handicapIndex ?? 0,
+        statsRounds: statsRounds.length,
+        girPct: agg.girPct,
+        fhPct: agg.fhPct,
+        avgPutts: agg.avgPutts,
+        sortValue: agg.girPct ?? -1,
+      };
+    }).filter(p => p.statsRounds > 0).sort((a, b) => b.sortValue - a.sortValue);
+  }, [players, rounds, courses]);
+
+  // Flight-filtered season data
+  const flights = league?.flights || [];
+  const filteredSeasonData = useMemo(() => {
+    if (!league?.flightsEnabled || !flights.length || activeFlight === 'all') return seasonData;
+    return seasonData.filter(row => {
+      const player = players.find(p => p.id === row.id);
+      return player && getPlayerFlight(player, flights)?.id === activeFlight;
+    });
+  }, [seasonData, activeFlight, league, flights, players]);
+
   const scoreLabels = { gross: 'Gross', net: 'Net', stableford: 'Stableford' };
   const vsParDisplay = (val) => {
     if (val === undefined || val === null) return '-';
@@ -170,6 +204,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
               ...(league?.splitIntoHalves ? [['1h','1st Half'],['2h','2nd Half']] : []),
               ['round','Round'],
               ['teams','Teams'],
+              ['stats','Stats'],
             ].map(([v, label]) => (
               <button
                 key={v}
@@ -246,6 +281,68 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
           </div>
         )}
 
+        {/* Flight filter tabs */}
+        {league?.flightsEnabled && flights.length > 0 && (view === 'season' || view === '1h' || view === '2h') && (
+          <div className="flex gap-2 flex-wrap">
+            {[{ id: 'all', label: 'All Flights' }, ...flights].map(f => (
+              <button key={f.id} onClick={() => setActiveFlight(f.id)}
+                className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                style={{ borderColor: activeFlight === f.id ? 'var(--color-accent)' : 'var(--color-border)', backgroundColor: activeFlight === f.id ? 'rgba(184,151,42,0.12)' : 'transparent', color: activeFlight === f.id ? 'var(--color-accent)' : 'var(--color-muted)' }}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Stats view */}
+        {view === 'stats' && (
+          <Card>
+            {statsData.length === 0 ? (
+              <p className="py-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>
+                No shot stats tracked yet. Use "Track Stats" when entering a round.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                      {['#', 'Player', 'Rounds', 'GIR %', 'FH %', 'Avg Putts'].map(h => (
+                        <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statsData.map((row, i) => (
+                      <tr key={row.id} style={{ borderBottom: '1px solid var(--color-border)' }} className="hover:bg-gray-50">
+                        <td className="px-3 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>{i + 1}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                              style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>
+                              {row.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                            </div>
+                            <span className="font-medium" style={{ color: 'var(--color-text)' }}>{row.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-center text-xs" style={{ color: 'var(--color-muted)' }}>{row.statsRounds}</td>
+                        <td className="px-3 py-3 text-center font-semibold" style={{ color: row.girPct != null ? (row.girPct >= 50 ? '#16a34a' : row.girPct >= 33 ? 'var(--color-accent)' : 'var(--color-danger)') : 'var(--color-muted)' }}>
+                          {row.girPct != null ? `${row.girPct}%` : '—'}
+                        </td>
+                        <td className="px-3 py-3 text-center font-semibold" style={{ color: row.fhPct != null ? (row.fhPct >= 60 ? '#16a34a' : row.fhPct >= 40 ? 'var(--color-accent)' : 'var(--color-danger)') : 'var(--color-muted)' }}>
+                          {row.fhPct != null ? `${row.fhPct}%` : '—'}
+                        </td>
+                        <td className="px-3 py-3 text-center" style={{ color: row.avgPutts != null ? (row.avgPutts <= 1.7 ? '#16a34a' : row.avgPutts <= 2.0 ? 'var(--color-text)' : 'var(--color-danger)') : 'var(--color-muted)' }}>
+                          {row.avgPutts != null ? row.avgPutts : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        )}
+
         {/* Teams view */}
         {view === 'teams' && (
           <div className="space-y-4">
@@ -301,7 +398,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
         )}
 
         {/* Main table */}
-        {view !== 'teams' && <Card>
+        {view !== 'teams' && view !== 'stats' && <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
