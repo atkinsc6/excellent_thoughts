@@ -39,9 +39,17 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
 
   const [grossScores, setGrossScores] = useState({});
   const [ctpWinners, setCtpWinners] = useState({});
+  const [overrideCtpHoles, setOverrideCtpHoles] = useState(false);
+  const [customCtpHoles, setCustomCtpHoles] = useState([]);
 
   const course = useMemo(() => courses.find(c => c.id === selectedCourseId), [courses, selectedCourseId]);
   const selectedPlayers = useMemo(() => players.filter(p => selectedPlayerIds.includes(p.id)), [players, selectedPlayerIds]);
+  const activeCtpHoles = overrideCtpHoles ? customCtpHoles : (league?.ctpHoles || []);
+
+  // Par-3 holes for the selected course (used for CTP hole override picker)
+  const par3Holes = useMemo(() =>
+    (course?.holes || []).filter(h => h.par === 3).map(h => h.number)
+  , [course]);
 
   function getTeeForPlayer(playerId) {
     return playerTees[playerId] || course?.tees?.[0]?.name || 'White';
@@ -125,6 +133,7 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
       playerIds: selectedPlayerIds,
       scores,
       ctpResults,
+      ctpHoles: overrideCtpHoles ? customCtpHoles : undefined,
       skinsResults: skinsPreview.map(s => ({ hole: s.hole, winnerId: s.winnerId, carryover: s.carryover, gross: league?.skinsType === 'gross' })),
       finalized: true,
       finalizedAt: new Date().toISOString(),
@@ -290,6 +299,56 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
                 </div>
               </div>
 
+              {/* CTP hole override */}
+              {par3Holes.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-medium" style={{ color: 'var(--color-muted)' }}>CTP Holes This Round</label>
+                    <button
+                      onClick={() => {
+                        setOverrideCtpHoles(v => !v);
+                        if (!overrideCtpHoles) setCustomCtpHoles([...par3Holes]);
+                      }}
+                      className="text-xs px-2 py-1 rounded border"
+                      style={{
+                        borderColor: overrideCtpHoles ? 'var(--color-accent)' : 'var(--color-border)',
+                        backgroundColor: overrideCtpHoles ? 'rgba(184,151,42,0.1)' : 'transparent',
+                        color: overrideCtpHoles ? 'var(--color-accent)' : 'var(--color-muted)',
+                      }}
+                    >
+                      {overrideCtpHoles ? 'Override on' : 'Use league default'}
+                    </button>
+                  </div>
+                  {overrideCtpHoles ? (
+                    <div className="flex flex-wrap gap-2">
+                      {par3Holes.map(h => {
+                        const selected = customCtpHoles.includes(h);
+                        return (
+                          <button
+                            key={h}
+                            onClick={() => setCustomCtpHoles(prev => selected ? prev.filter(n => n !== h) : [...prev, h])}
+                            className="px-3 py-1.5 rounded-lg border text-xs font-medium"
+                            style={{
+                              borderColor: selected ? 'var(--color-accent)' : 'var(--color-border)',
+                              backgroundColor: selected ? 'rgba(184,151,42,0.12)' : 'transparent',
+                              color: selected ? 'var(--color-accent)' : 'var(--color-muted)',
+                            }}
+                          >
+                            Hole {h} (par 3)
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      {(league?.ctpHoles?.length ?? 0) > 0
+                        ? `League defaults: holes ${league.ctpHoles.join(', ')}`
+                        : 'No CTP holes configured in league settings.'}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex justify-end">
                 <button
                   onClick={() => setStep(1)}
@@ -323,7 +382,7 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
               {Array.from({ length: 18 }, (_, i) => {
                 const hole = course.holes?.[i];
                 const holeNum = i + 1;
-                const isCtp = league?.ctpHoles?.includes(holeNum);
+                const isCtp = activeCtpHoles.includes(holeNum);
                 const skinsHole = skinsPreview[i];
                 return (
                   <div key={i} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
@@ -447,7 +506,7 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
                   {Array.from({ length: 18 }, (_, i) => {
                     const hole = course.holes?.[i];
                     const holeNum = i + 1;
-                    const isCtp = league?.ctpHoles?.includes(holeNum);
+                    const isCtp = activeCtpHoles.includes(holeNum);
                     const skinsHole = skinsPreview[i];
                     return (
                       <tr
@@ -535,11 +594,11 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
             </div>
 
             {/* CTP assignments if any */}
-            {(league?.ctpHoles?.length > 0) && (
+            {(activeCtpHoles.length > 0) && (
               <Card>
                 <CardHeader><CardTitle>CTP Winners</CardTitle></CardHeader>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {league.ctpHoles.map(hole => (
+                  {activeCtpHoles.map(hole => (
                     <div key={hole}>
                       <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>
                         Hole {hole}
@@ -561,6 +620,11 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
               </Card>
             )}
 
+            {selectedPlayers.some(p => !(grossScores[p.id] || []).some(s => s > 0)) && (
+              <div className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: 'rgba(184,151,42,0.1)', color: 'var(--color-accent)', border: '1px solid rgba(184,151,42,0.3)' }}>
+                Some players have no scores entered. You can still review, but totals will be incomplete.
+              </div>
+            )}
             <div className="flex justify-between">
               <button
                 onClick={() => setStep(0)}

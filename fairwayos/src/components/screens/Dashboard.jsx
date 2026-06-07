@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Trophy, TrendingDown, DollarSign, Target, CalendarDays, Medal, Users2 } from 'lucide-react';
@@ -6,6 +7,7 @@ import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { useHandicap } from '../../hooks/useHandicap';
 import { seasonSkinsTotals } from '../../utils/skins';
+import { partitionRoundsByHalf } from '../../utils/scoring';
 
 const PLAYER_COLORS = ['#1B4332','#B8972A','#2D6A4F','#DC2626','#7C3AED','#0284C7','#D97706','#059669'];
 
@@ -15,7 +17,7 @@ const ACTIVITY_ICONS = {
   settings_updated: '⚙️', team_created: '👥', league_created: '🏆',
 };
 
-export function Dashboard({ league, players, rounds, courses, teams = [], activity = [] }) {
+export function Dashboard({ league, players, rounds, courses, teams = [], activity = [], schedule = [] }) {
   const { getDifferentials, getHandicapTrend } = useHandicap(players, rounds, courses);
 
   const stats = useMemo(() => {
@@ -90,6 +92,29 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
     }).sort((a, b) => b.points - a.points || a.avgNet - b.avgNet);
   }, [players, rounds, stats, league]);
 
+  // Season halves
+  const { firstHalf, secondHalf } = useMemo(() =>
+    partitionRoundsByHalf(rounds, league?.halvesBreakpoint)
+  , [rounds, league]);
+
+  const buildHalfStandings = (roundSubset) =>
+    players.map(p => {
+      const pr = roundSubset.filter(r => r.playerIds.includes(p.id));
+      const totalNet = pr.reduce((s, r) => s + (r.scores?.find(sc => sc.playerId === p.id)?.totalNet || 0), 0);
+      let points = 0;
+      roundSubset.forEach(r => {
+        if (!r.playerIds.includes(p.id)) return;
+        const sorted = [...(r.scores || [])].sort((a, b) => a.totalNet - b.totalNet);
+        const rank = sorted.findIndex(s => s.playerId === p.id) + 1;
+        const pts = league?.pointsTable?.find(pt => pt.place === rank)?.points || 0;
+        points += pts;
+      });
+      return { id: p.id, name: p.name, rounds: pr.length, avgNet: pr.length ? Math.round(totalNet / pr.length * 10) / 10 : 0, points };
+    }).filter(r => r.rounds > 0).sort((a, b) => b.points - a.points || a.avgNet - b.avgNet);
+
+  const firstHalfStandings = useMemo(() => buildHalfStandings(firstHalf), [firstHalf, players, league]);
+  const secondHalfStandings = useMemo(() => buildHalfStandings(secondHalf), [secondHalf, players, league]);
+
   // Recent round
   const recentRound = useMemo(() => {
     if (!rounds.length) return null;
@@ -151,9 +176,11 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
     }).sort((a, b) => b.wins - a.wins || a.avgNet - b.avgNet);
   }, [teams, rounds]);
 
-  // Upcoming event
-  const today = new Date();
-  const nextRoundDate = new Date('2025-07-12');
+  // Upcoming event — derived from schedule
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const nextEvent = useMemo(() =>
+    [...(schedule || [])].filter(e => e.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date))[0] || null
+  , [schedule, todayStr]);
 
   const statCards = [
     {
@@ -221,7 +248,11 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
             <Card className="lg:col-span-1">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Most Recent Round</CardTitle>
+                  <Link to={`/round/${recentRound.id}`} style={{ textDecoration: 'none' }}>
+                    <CardTitle style={{ textDecoration: 'underline', textDecorationColor: 'var(--color-border)', cursor: 'pointer' }}>
+                      Most Recent Round
+                    </CardTitle>
+                  </Link>
                   <Badge variant="default">{format(parseISO(recentRound.date), 'MMM d')}</Badge>
                 </div>
                 <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{recentRound.courseName}</p>
@@ -253,25 +284,39 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
             <CardHeader>
               <CardTitle>Next Event</CardTitle>
             </CardHeader>
-            <div className="flex items-start gap-4 mt-2">
-              <div className="rounded-xl p-3 flex-shrink-0" style={{ backgroundColor: 'rgba(27,67,50,0.08)' }}>
-                <CalendarDays size={24} style={{ color: 'var(--color-primary)' }} />
+            {nextEvent ? (
+              <div className="flex items-start gap-4 mt-2">
+                <div className="rounded-xl p-3 flex-shrink-0" style={{ backgroundColor: 'rgba(27,67,50,0.08)' }}>
+                  <CalendarDays size={24} style={{ color: 'var(--color-primary)' }} />
+                </div>
+                <div>
+                  <div className="font-semibold text-base" style={{ color: 'var(--color-text)', fontFamily: 'Cormorant Garamond, serif' }}>
+                    {nextEvent.name}
+                  </div>
+                  <div className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    {format(parseISO(nextEvent.date), 'MMMM d, yyyy')}
+                  </div>
+                  {nextEvent.courseId && (
+                    <div className="text-sm mt-1" style={{ color: 'var(--color-text)' }}>
+                      {courses.find(c => c.id === nextEvent.courseId)?.name || ''}
+                    </div>
+                  )}
+                  {nextEvent.notes && (
+                    <div className="mt-1 text-xs" style={{ color: 'var(--color-muted)' }}>{nextEvent.notes}</div>
+                  )}
+                  {nextEvent.format && nextEvent.format !== 'individual' && (
+                    <div className="mt-2">
+                      <Badge variant="accent">{nextEvent.format.replace('_', ' ')}</Badge>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <div className="font-semibold text-base" style={{ color: 'var(--color-text)', fontFamily: 'Cormorant Garamond, serif' }}>
-                  Round 7
-                </div>
-                <div className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                  July 12, 2025
-                </div>
-                <div className="text-sm mt-1" style={{ color: 'var(--color-text)' }}>
-                  Cog Hill Golf &amp; Country Club
-                </div>
-                <div className="mt-2">
-                  <Badge variant="accent">Dubsdread</Badge>
-                </div>
+            ) : (
+              <div className="flex items-center gap-3 mt-4 text-sm" style={{ color: 'var(--color-muted)' }}>
+                <CalendarDays size={20} style={{ opacity: 0.4 }} />
+                No upcoming events. Add one in Schedule.
               </div>
-            </div>
+            )}
           </Card>
 
           {/* Handicap Trend */}
@@ -423,6 +468,42 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
             </Card>
           </div>
         </div>
+        {/* Season Halves */}
+        {league?.splitIntoHalves && (
+          <Card>
+            <CardHeader><CardTitle>Season Halves</CardTitle></CardHeader>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              {[
+                { label: '1st Half', data: firstHalfStandings, rounds: firstHalf.length },
+                { label: '2nd Half', data: secondHalfStandings, rounds: secondHalf.length },
+              ].map(half => (
+                <div key={half.label}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{half.label}</span>
+                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{half.rounds} round{half.rounds !== 1 ? 's' : ''}</span>
+                  </div>
+                  {half.data.length === 0 ? (
+                    <p className="text-xs py-4 text-center" style={{ color: 'var(--color-muted)' }}>No rounds yet</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {half.data.slice(0, 5).map((row, i) => (
+                        <div key={row.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg"
+                          style={{ backgroundColor: i === 0 ? 'rgba(184,151,42,0.08)' : 'var(--color-bg)' }}>
+                          <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                            style={{ backgroundColor: i === 0 ? 'var(--color-accent)' : 'rgba(107,114,128,0.12)', color: i === 0 ? 'var(--color-primary)' : 'var(--color-muted)' }}>
+                            {i + 1}
+                          </span>
+                          <span className="flex-1 text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{row.name.split(' ')[0]}</span>
+                          <span className="text-xs font-bold" style={{ color: 'var(--color-accent)' }}>{row.points}pt</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );

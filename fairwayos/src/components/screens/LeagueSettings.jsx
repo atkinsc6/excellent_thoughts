@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Save, Settings, Unlock, RefreshCw, Download, Trash2, AlertTriangle } from 'lucide-react';
+import { Save, Settings, Unlock, RefreshCw, Download, Trash2, AlertTriangle, Archive, ChevronDown, ChevronRight } from 'lucide-react';
 import { TopBar } from '../layout/TopBar';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -7,10 +7,12 @@ import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
 import { logActivity, ACTIVITY_TYPES } from '../../utils/activity';
 
-export function LeagueSettings({ league, setLeague, rounds, setRounds, players, setPlayers, refreshActivity }) {
+export function LeagueSettings({ league, setLeague, rounds, setRounds, players, setPlayers, refreshActivity, archives = [], setArchives }) {
   const [form, setForm] = useState({ ...league });
   const [saved, setSaved] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [expandedArchive, setExpandedArchive] = useState(null);
 
   const update = (field, value) => setForm(f => ({ ...f, [field]: value }));
 
@@ -56,6 +58,55 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
     setRounds([]);
     setResetConfirm(false);
     logActivity(league?.id, ACTIVITY_TYPES.SETTINGS_UPDATED, 'Season data reset by commissioner');
+    refreshActivity?.();
+  };
+
+  const archiveSeason = () => {
+    // Build snapshot
+    const standings = players.map(p => {
+      const pr = rounds.filter(r => r.playerIds?.includes(p.id));
+      const totalNet = pr.reduce((s, r) => s + (r.scores?.find(sc => sc.playerId === p.id)?.totalNet || 0), 0);
+      let points = 0;
+      rounds.forEach(r => {
+        if (!r.playerIds?.includes(p.id)) return;
+        const sorted = [...(r.scores || [])].sort((a, b) => a.totalNet - b.totalNet);
+        const rank = sorted.findIndex(s => s.playerId === p.id) + 1;
+        const pts = league?.pointsTable?.find(pt => pt.place === rank)?.points || 0;
+        points += pts;
+      });
+      const avgNet = pr.length ? Math.round(totalNet / pr.length * 10) / 10 : 0;
+      return { name: p.name, points, avgNet, rounds: pr.length };
+    }).sort((a, b) => b.points - a.points || a.avgNet - b.avgNet);
+
+    // Skins leader
+    const skinsCounts = {};
+    rounds.forEach(r => (r.skinsResults || []).forEach(s => {
+      if (s.winnerId) skinsCounts[s.winnerId] = (skinsCounts[s.winnerId] || 0) + s.pot;
+    }));
+    const topSkinsId = Object.entries(skinsCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+
+    // CTP leader
+    const ctpCounts = {};
+    rounds.forEach(r => (r.ctpResults || []).forEach(c => {
+      ctpCounts[c.winnerId] = (ctpCounts[c.winnerId] || 0) + 1;
+    }));
+    const topCtpId = Object.entries(ctpCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+
+    const snapshot = {
+      id: `archive-${Date.now()}`,
+      season: league?.season || new Date().getFullYear().toString(),
+      archivedAt: new Date().toISOString(),
+      champion: standings[0] || null,
+      topStandings: standings.slice(0, 8),
+      skinsChampion: topSkinsId ? { name: players.find(p => p.id === topSkinsId)?.name, skins: skinsCounts[topSkinsId] } : null,
+      ctpChampion: topCtpId ? { name: players.find(p => p.id === topCtpId)?.name, wins: ctpCounts[topCtpId] } : null,
+      totalRounds: rounds.length,
+    };
+
+    setArchives(prev => [snapshot, ...(prev || [])]);
+    setRounds([]);
+    setArchiveConfirm(false);
+    logActivity(league?.id, ACTIVITY_TYPES.SETTINGS_UPDATED, `Season ${snapshot.season} archived`);
     refreshActivity?.();
   };
 
@@ -245,6 +296,18 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
             onChange={v => update('ctpEnabled', v)}
             description="Track closest-to-pin winners on par 3 holes"
           />
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>CTP Entry ($)</label>
+            <input
+              type="number"
+              min="1"
+              max="100"
+              value={form.ctpEntry ?? 5}
+              onChange={e => update('ctpEntry', parseInt(e.target.value) || 5)}
+              className="w-32 px-3 py-2 rounded-lg border text-sm"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-surface)' }}
+            />
+          </div>
         </Section>
 
         {/* Points Table */}
@@ -268,6 +331,53 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
               </div>
             ))}
           </div>
+        </Section>
+
+        {/* Season Structure */}
+        <Section title="Season Structure">
+          <Toggle
+            label="Split into halves"
+            checked={form.splitIntoHalves || false}
+            onChange={v => update('splitIntoHalves', v)}
+            description="Track 1st half and 2nd half standings alongside overall"
+          />
+          {form.splitIntoHalves && (
+            <div className="space-y-3 pt-1">
+              <RadioGroup
+                label="Midpoint type"
+                value={form.halvesBreakpoint?.type || 'round'}
+                onChange={v => update('halvesBreakpoint', { type: v, value: v === 'round' ? (form.halvesBreakpoint?.value || 4) : (form.halvesBreakpoint?.value || '') })}
+                options={[
+                  { value: 'round', label: 'After round N' },
+                  { value: 'date', label: 'By date' },
+                ]}
+              />
+              {(form.halvesBreakpoint?.type || 'round') === 'round' ? (
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Split after round #</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.halvesBreakpoint?.value || 4}
+                    onChange={e => update('halvesBreakpoint', { type: 'round', value: parseInt(e.target.value) || 1 })}
+                    className="w-24 px-3 py-2 rounded-lg border text-sm"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-surface)' }}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Midpoint date</label>
+                  <input
+                    type="date"
+                    value={form.halvesBreakpoint?.value || ''}
+                    onChange={e => update('halvesBreakpoint', { type: 'date', value: e.target.value })}
+                    className="w-full sm:w-48 px-3 py-2 rounded-lg border text-sm"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-surface)' }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </Section>
 
         {/* Scoring Rules */}
@@ -362,6 +472,39 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
               </button>
             </div>
 
+            {rounds.length > 0 && (
+              <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-accent)', backgroundColor: 'rgba(184,151,42,0.03)' }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
+                      <Archive size={14} style={{ color: 'var(--color-accent)' }} /> Archive Season
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Snapshot standings and clear rounds to start a new season</div>
+                  </div>
+                  {!archiveConfirm ? (
+                    <button onClick={() => setArchiveConfirm(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white"
+                      style={{ backgroundColor: 'var(--color-accent)' }}>
+                      <Archive size={13} /> Archive
+                    </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button onClick={() => setArchiveConfirm(false)}
+                        className="px-3 py-1.5 rounded-lg text-sm font-medium border"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                        Cancel
+                      </button>
+                      <button onClick={archiveSeason}
+                        className="px-3 py-1.5 rounded-lg text-sm font-bold text-white"
+                        style={{ backgroundColor: 'var(--color-accent)' }}>
+                        Confirm Archive
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-danger)', backgroundColor: 'rgba(220,38,38,0.03)' }}>
               <div className="flex items-center justify-between">
                 <div>
@@ -394,6 +537,77 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
             </div>
           </div>
         </Section>
+
+        {/* Past Seasons */}
+        {archives.length > 0 && (
+          <Section title="Past Seasons">
+            <div className="space-y-2">
+              {archives.map(a => (
+                <div key={a.id} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                  <button
+                    className="w-full flex items-center justify-between p-3 text-left"
+                    style={{ backgroundColor: expandedArchive === a.id ? 'rgba(27,67,50,0.04)' : 'var(--color-surface)' }}
+                    onClick={() => setExpandedArchive(expandedArchive === a.id ? null : a.id)}
+                  >
+                    <div>
+                      <div className="font-semibold text-sm" style={{ color: 'var(--color-text)', fontFamily: 'Cormorant Garamond, serif', fontSize: '16px' }}>
+                        Season {a.season}
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        {a.totalRounds} rounds · Archived {new Date(a.archivedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {a.champion && (
+                        <div className="text-right hidden sm:block">
+                          <div className="text-xs font-medium" style={{ color: 'var(--color-accent)' }}>Champion</div>
+                          <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{a.champion.name}</div>
+                        </div>
+                      )}
+                      {expandedArchive === a.id ? <ChevronDown size={16} style={{ color: 'var(--color-muted)' }} /> : <ChevronRight size={16} style={{ color: 'var(--color-muted)' }} />}
+                    </div>
+                  </button>
+                  {expandedArchive === a.id && (
+                    <div className="p-4 border-t space-y-3" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                          { label: 'Champion', value: a.champion?.name || '—', sub: `${a.champion?.points || 0} pts` },
+                          { label: 'Rounds', value: a.totalRounds },
+                          { label: 'Skins Champ', value: a.skinsChampion?.name || '—', sub: `${a.skinsChampion?.skins || 0} skins` },
+                          { label: 'CTP Champ', value: a.ctpChampion?.name || '—', sub: `${a.ctpChampion?.wins || 0} wins` },
+                        ].map(({ label, value, sub }) => (
+                          <div key={label} className="p-2.5 rounded-lg" style={{ backgroundColor: 'var(--color-surface)' }}>
+                            <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{label}</div>
+                            <div className="text-base font-bold mt-0.5" style={{ fontFamily: 'Cormorant Garamond, serif', color: 'var(--color-text)' }}>{value}</div>
+                            {sub && <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{sub}</div>}
+                          </div>
+                        ))}
+                      </div>
+                      {a.topStandings?.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Final Standings</div>
+                          <div className="space-y-1">
+                            {a.topStandings.slice(0, 5).map((row, i) => (
+                              <div key={i} className="flex items-center gap-2 py-1">
+                                <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                  style={{ backgroundColor: i === 0 ? 'var(--color-accent)' : 'rgba(107,114,128,0.12)', color: i === 0 ? 'var(--color-primary)' : 'var(--color-muted)' }}>
+                                  {i + 1}
+                                </span>
+                                <span className="flex-1 text-sm font-medium" style={{ color: 'var(--color-text)' }}>{row.name}</span>
+                                <span className="text-xs" style={{ color: 'var(--color-accent)' }}>{row.points}pt</span>
+                                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{row.avgNet} avg net</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
 
         <div className="flex justify-end pt-2">
           <Button variant="primary" size="lg" onClick={save}>

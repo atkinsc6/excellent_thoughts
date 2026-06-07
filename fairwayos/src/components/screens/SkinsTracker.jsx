@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TopBar } from '../layout/TopBar';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
-import { seasonSkinsTotals, skinsSummary } from '../../utils/skins';
+import { calcSkins, skinsSummary } from '../../utils/skins';
 
 export function SkinsTracker({ players, rounds, courses, league, teams = [] }) {
   const [skinsType, setSkinsType] = useState('gross'); // 'gross' | 'net'
@@ -13,19 +13,32 @@ export function SkinsTracker({ players, rounds, courses, league, teams = [] }) {
 
   const sortedRounds = useMemo(() => [...rounds].sort((a, b) => new Date(b.date) - new Date(a.date)), [rounds]);
 
+  // Live skins results recalculated from raw scores so gross/net toggle works correctly
+  const liveRoundSkins = useMemo(() => {
+    const map = {};
+    rounds.forEach(r => {
+      const course = courses.find(c => c.id === r.courseId);
+      if (course?.holes && (r.scores?.length ?? 0) >= 2) {
+        map[r.id] = calcSkins(course.holes, r.scores, skinsType);
+      } else {
+        map[r.id] = r.skinsResults || [];
+      }
+    });
+    return map;
+  }, [rounds, courses, skinsType]);
+
   // Season totals
   const seasonTotals = useMemo(() => {
     return players.map(p => {
       let total = 0;
       rounds.forEach(r => {
-        const results = r.skinsResults || [];
-        results.forEach(sr => {
+        (liveRoundSkins[r.id] || []).forEach(sr => {
           if (sr.winnerId === p.id) total += sr.pot;
         });
       });
       return { player: p, skins: total };
     }).sort((a, b) => b.skins - a.skins);
-  }, [players, rounds]);
+  }, [players, rounds, liveRoundSkins]);
 
   const entryFee = league?.skinsEntry || 5;
   const playersPerRound = rounds[0]?.playerIds?.length || 8;
@@ -33,8 +46,8 @@ export function SkinsTracker({ players, rounds, courses, league, teams = [] }) {
 
   // Total carryovers still pending
   const lastRound = sortedRounds[0];
-  const pendingCarryover = lastRound?.skinsResults
-    ? lastRound.skinsResults.filter(s => s.carryover && !s.winnerId).length
+  const pendingCarryover = lastRound
+    ? (liveRoundSkins[lastRound.id] || []).filter(s => s.carryover && !s.winnerId).length
     : 0;
 
   const playerName = (id) => players.find(p => p.id === id)?.name || 'Unknown';
@@ -54,20 +67,20 @@ export function SkinsTracker({ players, rounds, courses, league, teams = [] }) {
     return teams.map(team => {
       let total = 0;
       rounds.forEach(r => {
-        (r.skinsResults || []).forEach(sr => {
+        (liveRoundSkins[r.id] || []).forEach(sr => {
           if (sr.winnerId && team.playerIds.includes(sr.winnerId)) total += sr.pot;
         });
       });
       const roundBreakdown = rounds.map(r => {
         let roundTotal = 0;
-        (r.skinsResults || []).forEach(sr => {
+        (liveRoundSkins[r.id] || []).forEach(sr => {
           if (sr.winnerId && team.playerIds.includes(sr.winnerId)) roundTotal += sr.pot;
         });
         return { roundId: r.id, date: r.date, skins: roundTotal };
       }).filter(rb => rb.skins > 0);
       return { ...team, totalSkins: total, payout: total * potPerSkin, roundBreakdown };
     }).sort((a, b) => b.totalSkins - a.totalSkins);
-  }, [teams, rounds, potPerSkin]);
+  }, [teams, rounds, potPerSkin, liveRoundSkins]);
 
   return (
     <div className="flex-1 overflow-y-auto pb-20 lg:pb-6" style={{ backgroundColor: 'var(--color-bg)' }}>
@@ -233,7 +246,7 @@ export function SkinsTracker({ players, rounds, courses, league, teams = [] }) {
           <div className="space-y-4">
             {sortedRounds.map(r => {
               const course = courses.find(c => c.id === r.courseId);
-              const skins = r.skinsResults || [];
+              const skins = liveRoundSkins[r.id] || [];
               const winners = skins.filter(s => s.winnerId);
               const carryovers = skins.filter(s => !s.winnerId);
 

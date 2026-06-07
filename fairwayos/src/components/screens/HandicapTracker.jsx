@@ -1,18 +1,20 @@
 import { useState, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TopBar } from '../layout/TopBar';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { useHandicap } from '../../hooks/useHandicap';
-import { calcHandicapIndex } from '../../utils/scoring';
+import { calcHandicapIndex, calcScorecardBreakdown } from '../../utils/scoring';
 
 const PLAYER_COLORS = ['#1B4332','#B8972A','#2D6A4F','#DC2626','#7C3AED','#0284C7','#D97706','#059669'];
 
 export function HandicapTracker({ players, setPlayers, rounds, courses }) {
   const { getDifferentials, getHandicapTrend, getHandicapIndex } = useHandicap(players, rounds, courses);
+  const [tab, setTab] = useState('handicap'); // 'handicap' | 'stats'
   const [selectedPlayer, setSelectedPlayer] = useState(players[0]?.id || '');
+  const [statsPlayerId, setStatsPlayerId] = useState(players[0]?.id || '');
   const [editingHcp, setEditingHcp] = useState(null); // playerId
   const [editValue, setEditValue] = useState('');
   const [visiblePlayers, setVisiblePlayers] = useState(players.slice(0, 4).map(p => p.id));
@@ -55,11 +57,177 @@ export function HandicapTracker({ players, setPlayers, rounds, courses }) {
   const selectedPlayerObj = players.find(p => p.id === selectedPlayer);
   const computedIndex = getHandicapIndex(selectedPlayer);
 
+  const statsPlayer = players.find(p => p.id === statsPlayerId);
+
+  const statsData = useMemo(() => {
+    if (!statsPlayerId) return null;
+    const playerRounds = rounds.filter(r => r.playerIds?.includes(statsPlayerId) && r.scores);
+    if (!playerRounds.length) return null;
+
+    // Per-hole avg delta vs par
+    const holeData = Array.from({ length: 18 }, (_, i) => {
+      const deltas = playerRounds
+        .map(r => {
+          const course = courses.find(c => c.id === r.courseId);
+          const ps = r.scores?.find(s => s.playerId === statsPlayerId);
+          const gross = ps?.grossScores?.[i];
+          const par = course?.holes?.[i]?.par;
+          return (gross && par) ? gross - par : null;
+        })
+        .filter(d => d !== null);
+      const avg = deltas.length ? deltas.reduce((s, v) => s + v, 0) / deltas.length : 0;
+      return { hole: i + 1, avgDelta: parseFloat(avg.toFixed(2)) };
+    });
+
+    // Scoring breakdown totals
+    let breakdown = { eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0, worse: 0 };
+    playerRounds.forEach(r => {
+      const course = courses.find(c => c.id === r.courseId);
+      const ps = r.scores?.find(s => s.playerId === statsPlayerId);
+      if (!ps || !course) return;
+      const b = calcScorecardBreakdown(ps.grossScores, course.holes);
+      Object.keys(breakdown).forEach(k => { breakdown[k] += b[k]; });
+    });
+
+    // Par type averages
+    const parBuckets = { 3: [], 4: [], 5: [] };
+    playerRounds.forEach(r => {
+      const course = courses.find(c => c.id === r.courseId);
+      const ps = r.scores?.find(s => s.playerId === statsPlayerId);
+      if (!ps || !course) return;
+      ps.grossScores.forEach((g, i) => {
+        const par = course.holes[i]?.par;
+        if (g && par && parBuckets[par]) parBuckets[par].push(g);
+      });
+    });
+    const parTypeAvg = {};
+    Object.entries(parBuckets).forEach(([par, scores]) => {
+      parTypeAvg[par] = scores.length ? (scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(1) : null;
+    });
+
+    // Std deviation of round gross scores
+    const roundGross = playerRounds.map(r => r.scores?.find(s => s.playerId === statsPlayerId)?.totalGross).filter(Boolean);
+    const mean = roundGross.reduce((s, v) => s + v, 0) / (roundGross.length || 1);
+    const stdDev = roundGross.length > 1
+      ? Math.sqrt(roundGross.reduce((s, v) => s + (v - mean) ** 2, 0) / roundGross.length).toFixed(1)
+      : null;
+
+    const byNet = (a, b) => (a.scores?.find(s => s.playerId === statsPlayerId)?.totalNet || 999) -
+                            (b.scores?.find(s => s.playerId === statsPlayerId)?.totalNet || 999);
+    const sortedByNet = [...playerRounds].sort(byNet);
+    const bestRound = sortedByNet[0];
+    const worstRound = sortedByNet[sortedByNet.length - 1];
+
+    return { holeData, breakdown, parTypeAvg, stdDev, bestRound, worstRound, roundCount: playerRounds.length };
+  }, [statsPlayerId, rounds, courses]);
+
   return (
     <div className="flex-1 overflow-y-auto pb-20 lg:pb-6" style={{ backgroundColor: 'var(--color-bg)' }}>
-      <TopBar title="Handicap Tracker" subtitle="WHS handicap indices and differential history" />
+      <TopBar title="Handicap Tracker" subtitle="WHS handicap indices and differential history">
+        <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+          {[['handicap','Handicap'],['stats','Stats']].map(([v, label]) => (
+            <button key={v} onClick={() => setTab(v)}
+              className="px-4 py-1.5 text-sm font-medium transition-all"
+              style={{ backgroundColor: tab === v ? 'var(--color-primary)' : 'var(--color-surface)', color: tab === v ? 'white' : 'var(--color-muted)' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </TopBar>
 
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
+
+        {/* ── Stats Tab ── */}
+        {tab === 'stats' && (
+          <div className="space-y-6">
+            {/* Player selector */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Player:</label>
+              <select
+                value={statsPlayerId}
+                onChange={e => setStatsPlayerId(e.target.value)}
+                className="px-3 py-1.5 rounded-lg border text-sm"
+                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
+              >
+                {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              {statsData && (
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{statsData.roundCount} rounds analyzed</span>
+              )}
+            </div>
+
+            {!statsData ? (
+              <Card><p className="py-8 text-center text-sm" style={{ color: 'var(--color-muted)' }}>No rounds found for this player.</p></Card>
+            ) : (
+              <>
+                {/* Stat summary cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Std Dev (Gross)', value: statsData.stdDev ?? '—', sub: 'Lower = more consistent' },
+                    { label: 'Best Net', value: statsData.bestRound?.scores?.find(s => s.playerId === statsPlayerId)?.totalNet ?? '—', sub: format(parseISO(statsData.bestRound?.date || new Date().toISOString()), 'MMM d') },
+                    { label: 'Worst Net', value: statsData.worstRound?.scores?.find(s => s.playerId === statsPlayerId)?.totalNet ?? '—', sub: format(parseISO(statsData.worstRound?.date || new Date().toISOString()), 'MMM d') },
+                    { label: 'Par 3 Avg', value: statsData.parTypeAvg[3] ?? '—', sub: `Par 4: ${statsData.parTypeAvg[4] ?? '—'} · Par 5: ${statsData.parTypeAvg[5] ?? '—'}` },
+                  ].map((sc, i) => (
+                    <Card key={i}>
+                      <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-muted)' }}>{sc.label}</div>
+                      <div className="text-2xl font-bold" style={{ fontFamily: 'Cormorant Garamond, serif', color: 'var(--color-text)' }}>{sc.value}</div>
+                      <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{sc.sub}</div>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Scoring breakdown badges */}
+                <Card>
+                  <CardHeader><CardTitle>Scoring Breakdown</CardTitle></CardHeader>
+                  <div className="flex flex-wrap gap-3 mt-3">
+                    {[
+                      { label: 'Eagles', value: statsData.breakdown.eagles, color: '#7C3AED' },
+                      { label: 'Birdies', value: statsData.breakdown.birdies, color: '#16A34A' },
+                      { label: 'Pars', value: statsData.breakdown.pars, color: 'var(--color-primary)' },
+                      { label: 'Bogeys', value: statsData.breakdown.bogeys, color: 'var(--color-accent)' },
+                      { label: 'Doubles', value: statsData.breakdown.doubles, color: 'var(--color-danger)' },
+                      { label: 'Worse', value: statsData.breakdown.worse, color: '#7F1D1D' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="flex flex-col items-center px-4 py-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', minWidth: '72px' }}>
+                        <div className="text-2xl font-bold" style={{ fontFamily: 'Cormorant Garamond, serif', color }}>{value}</div>
+                        <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+
+                {/* Per-hole bar chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Avg Score vs Par by Hole</CardTitle>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Green = under par average, red = over par average</p>
+                  </CardHeader>
+                  <ResponsiveContainer width="100%" height={240} className="mt-3">
+                    <BarChart data={statsData.holeData} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                      <XAxis dataKey="hole" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} />
+                      <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted)' }} tickFormatter={v => v > 0 ? `+${v}` : v} />
+                      <Tooltip
+                        contentStyle={{ fontSize: 11, border: '1px solid var(--color-border)', borderRadius: '8px' }}
+                        formatter={(val) => [val > 0 ? `+${val}` : val, 'Avg vs Par']}
+                        labelFormatter={label => `Hole ${label}`}
+                      />
+                      <Bar dataKey="avgDelta" radius={[3, 3, 0, 0]}>
+                        {statsData.holeData.map((entry, i) => (
+                          <Cell key={i} fill={entry.avgDelta <= 0 ? '#16A34A' : entry.avgDelta <= 1 ? 'var(--color-accent)' : 'var(--color-danger)'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Handicap Tab ── */}
+        {tab === 'handicap' && <>
+
         {/* Current Indices Table */}
         <Card>
           <CardHeader>
@@ -271,6 +439,7 @@ export function HandicapTracker({ players, setPlayers, rounds, courses }) {
             WHS: Best 8 differentials of last 20 rounds × 0.96, capped at 54.0. Gold values indicate differentials used in current index calculation.
           </p>
         </Card>
+        </>}
       </div>
     </div>
   );

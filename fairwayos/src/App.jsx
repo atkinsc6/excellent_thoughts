@@ -4,7 +4,6 @@ import { useLeague } from './hooks/useLeague';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileNav } from './components/layout/MobileNav';
 import { Dashboard } from './components/screens/Dashboard';
-import { ScorecardEntry } from './components/screens/ScorecardEntry';
 import { RoundWizard } from './components/screens/RoundWizard';
 import { Leaderboard } from './components/screens/Leaderboard';
 import { SkinsTracker } from './components/screens/SkinsTracker';
@@ -17,6 +16,7 @@ import { Teams } from './components/screens/Teams';
 import { PlayerProfile } from './components/screens/PlayerProfile';
 import { Schedule } from './components/screens/Schedule';
 import { Payouts } from './components/screens/Payouts';
+import { RoundViewer } from './components/screens/RoundViewer';
 import { Login } from './components/screens/Login';
 
 function AppShell() {
@@ -24,6 +24,7 @@ function AppShell() {
   const leagueData = useLeague(user ? activeLeagueId : null);
   const { league, setLeague, players, setPlayers, rounds, setRounds, courses, setCourses,
           teams, setTeams, activity, setActivity, refreshActivity, schedule, setSchedule,
+          archives, setArchives,
           getNotifReadAt, markNotifsRead, loading: leagueLoading } = leagueData;
 
   if (authLoading) {
@@ -53,6 +54,7 @@ function AppShell() {
   const sharedProps = {
     league, setLeague, players, setPlayers, rounds, setRounds, courses, setCourses,
     teams, setTeams, activity, setActivity, refreshActivity, schedule, setSchedule,
+    archives, setArchives,
     getNotifReadAt, markNotifsRead,
   };
 
@@ -73,6 +75,7 @@ function AppShell() {
           <Route path="/teams" element={<Teams {...sharedProps} />} />
           <Route path="/profile/:playerId" element={<PlayerProfile {...sharedProps} />} />
           <Route path="/schedule" element={<Schedule {...sharedProps} />} />
+          <Route path="/round/:roundId" element={<RoundViewer {...sharedProps} />} />
           <Route path="/payouts" element={<Payouts {...sharedProps} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

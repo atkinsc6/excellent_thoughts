@@ -30,7 +30,7 @@ const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function Schedule({ league, courses, schedule, setSchedule }) {
   const [view, setView] = useState('list');
-  const [calMonth, setCalMonth] = useState(new Date(2026, 5, 1));
+  const [calMonth, setCalMonth] = useState(startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -41,7 +41,7 @@ export function Schedule({ league, courses, schedule, setSchedule }) {
     notes: '',
   });
 
-  const today = new Date(2026, 5, 3);
+  const today = new Date();
 
   const sorted = useMemo(
     () => [...(schedule || [])].sort((a, b) => a.date.localeCompare(b.date)),
