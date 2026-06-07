@@ -10,6 +10,7 @@ function leagueKeys(leagueId) {
     teams: `fos_${leagueId}_teams`,
     activity: `fos_${leagueId}_activity`,
     schedule: `fos_${leagueId}_schedule`,
+    archives: `fos_${leagueId}_archives`,
     initialized: `fos_${leagueId}_initialized`,
     notifRead: `fos_${leagueId}_notif_read`,
   };
@@ -30,6 +31,7 @@ export function useLeague(leagueId) {
   const [teams, setTeamsState] = useState([]);
   const [activity, setActivityState] = useState([]);
   const [schedule, setScheduleState] = useState([]);
+  const [archives, setArchivesState] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,6 +55,7 @@ export function useLeague(leagueId) {
       setTeamsState(mock.teams || []);
       setActivityState(mock.activity || []);
       setScheduleState(mock.schedule || []);
+      setArchivesState([]);
     } else {
       setLeagueState(load(KEYS.league));
       setPlayersState(load(KEYS.players) || []);
@@ -61,6 +64,7 @@ export function useLeague(leagueId) {
       setTeamsState(load(KEYS.teams) || []);
       setActivityState(load(KEYS.activity) || []);
       setScheduleState(load(KEYS.schedule) || []);
+      setArchivesState(load(KEYS.archives) || []);
     }
     setLoading(false);
   }, [leagueId]);
@@ -108,6 +112,11 @@ export function useLeague(leagueId) {
     setScheduleState(next);
     if (leagueId) save(leagueKeys(leagueId).schedule, next);
   }
+  function setArchives(val) {
+    const next = typeof val === 'function' ? val(archives) : val;
+    setArchivesState(next);
+    if (leagueId) save(leagueKeys(leagueId).archives, next);
+  }
 
   function getNotifReadAt() {
     if (!leagueId) return null;
@@ -139,6 +148,7 @@ export function useLeague(leagueId) {
     teams, setTeams,
     activity, setActivity, refreshActivity,
     schedule, setSchedule,
+    archives, setArchives,
     loading,
     getNotifReadAt, markNotifsRead,
     resetData,
