@@ -245,6 +245,18 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
             onChange={v => update('ctpEnabled', v)}
             description="Track closest-to-pin winners on par 3 holes"
           />
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>CTP Entry ($)</label>
+            <input
+              type="number"
+              min="1"
+              max="100"
+              value={form.ctpEntry ?? 5}
+              onChange={e => update('ctpEntry', parseInt(e.target.value) || 5)}
+              className="w-32 px-3 py-2 rounded-lg border text-sm"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-surface)' }}
+            />
+          </div>
         </Section>
 
         {/* Points Table */}

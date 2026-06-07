@@ -561,6 +561,11 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
               </Card>
             )}
 
+            {selectedPlayers.some(p => !(grossScores[p.id] || []).some(s => s > 0)) && (
+              <div className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: 'rgba(184,151,42,0.1)', color: 'var(--color-accent)', border: '1px solid rgba(184,151,42,0.3)' }}>
+                Some players have no scores entered. You can still review, but totals will be incomplete.
+              </div>
+            )}
             <div className="flex justify-between">
               <button
                 onClick={() => setStep(0)}
