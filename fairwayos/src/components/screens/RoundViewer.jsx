@@ -1,11 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
-import { ArrowLeft, Printer, Trophy, Target, DollarSign } from 'lucide-react';
+import { ArrowLeft, Printer, Trophy, Target, DollarSign, Share2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { calcSkins, skinsSummary } from '../../utils/skins';
 import { calcMatchPlay } from '../../utils/scoring';
+import { RoundRecapModal } from './RoundRecapModal';
 
 function MatchHoleCell({ result }) {
   const style = result === 'W'
@@ -120,6 +121,7 @@ function SubtotalRow({ label, holes, playerScores, players, selectedPlayers }) {
 export function RoundViewer({ players, rounds, courses, league }) {
   const { roundId } = useParams();
   const navigate = useNavigate();
+  const [showRecap, setShowRecap] = useState(false);
 
   const round = rounds.find(r => r.id === roundId);
   const course = round ? courses.find(c => c.id === round.courseId) : null;
@@ -154,6 +156,7 @@ export function RoundViewer({ players, rounds, courses, league }) {
   const playerName = (id) => players.find(p => p.id === id)?.name || 'Unknown';
 
   return (
+    <>
     <div className="flex-1 overflow-y-auto pb-20 lg:pb-6" style={{ backgroundColor: 'var(--color-bg)' }}>
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
@@ -182,14 +185,29 @@ export function RoundViewer({ players, rounds, courses, league }) {
               </div>
             </div>
           </div>
-          <button
-            onClick={() => window.print()}
-            className="no-print flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white flex-shrink-0"
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            <Printer size={14} /> Print
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowRecap(true)}
+              className="no-print flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium flex-shrink-0"
+              style={{ backgroundColor: 'rgba(27,67,50,0.08)', color: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
+            >
+              <Share2 size={14} /> Share
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="no-print flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white flex-shrink-0"
+              style={{ backgroundColor: 'var(--color-primary)' }}
+            >
+              <Printer size={14} /> Print
+            </button>
+          </div>
         </div>
+
+        {round.notes && (
+          <div className="px-4 py-3 rounded-xl italic text-sm no-print" style={{ backgroundColor: 'rgba(27,67,50,0.05)', borderLeft: '3px solid var(--color-primary)', color: 'var(--color-text)' }}>
+            "{round.notes}"
+          </div>
+        )}
 
         {/* Match play results */}
         {round.format === 'match' && round.matchResult?.pairs?.length > 0 && (
@@ -466,5 +484,16 @@ export function RoundViewer({ players, rounds, courses, league }) {
         )}
       </div>
     </div>
+
+    {showRecap && (
+      <RoundRecapModal
+        round={round}
+        course={course}
+        players={players}
+        league={league}
+        onClose={() => setShowRecap(false)}
+      />
+    )}
+  </>
   );
 }

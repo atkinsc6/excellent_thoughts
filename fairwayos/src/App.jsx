@@ -22,6 +22,7 @@ import { Awards } from './components/screens/Awards';
 import { TeeSheet } from './components/screens/TeeSheet';
 import { PublicLeague } from './components/screens/PublicLeague';
 import { Login } from './components/screens/Login';
+import { RyderCup } from './components/screens/RyderCup';
 
 function OfflineBanner() {
   const isOnline = useOnlineStatus();
@@ -40,7 +41,7 @@ function AppShell() {
   const leagueData = useLeague(user ? activeLeagueId : null);
   const { league, setLeague, players, setPlayers, rounds, setRounds, courses, setCourses,
           teams, setTeams, activity, setActivity, refreshActivity, schedule, setSchedule,
-          archives, setArchives,
+          archives, setArchives, announcements, setAnnouncements, ryderCups, setRyderCups,
           getNotifReadAt, markNotifsRead, loading: leagueLoading } = leagueData;
 
   if (authLoading) {
@@ -70,7 +71,7 @@ function AppShell() {
   const sharedProps = {
     league, setLeague, players, setPlayers, rounds, setRounds, courses, setCourses,
     teams, setTeams, activity, setActivity, refreshActivity, schedule, setSchedule,
-    archives, setArchives,
+    archives, setArchives, announcements, setAnnouncements, ryderCups, setRyderCups,
     getNotifReadAt, markNotifsRead,
   };
 
@@ -96,6 +97,7 @@ function AppShell() {
           <Route path="/payouts" element={<Payouts {...sharedProps} />} />
           <Route path="/awards" element={<Awards {...sharedProps} />} />
           <Route path="/teesheet/:eventId" element={<TeeSheet {...sharedProps} />} />
+          <Route path="/ryder-cup" element={<RyderCup {...sharedProps} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <MobileNav />

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Trophy, DollarSign, Target, TrendingUp, Users, MapPin, Settings,
-  Users2, CalendarDays, Bell, ChevronDown, Plus, LogIn, LogOut, Check, Award, Download
+  Users2, CalendarDays, Bell, ChevronDown, Plus, LogIn, LogOut, Check, Award, Download, Shield
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { path: '/members',     icon: Users,            label: 'Members' },
   { path: '/courses',     icon: MapPin,           label: 'Courses' },
   { path: '/schedule',    icon: CalendarDays,     label: 'Schedule' },
+  { path: '/ryder-cup',   icon: Shield,           label: 'Ryder Cup' },
   { path: '/payouts',     icon: DollarSign,       label: 'Payouts' },
   { path: '/settings',    icon: Settings,         label: 'Settings' },
 ];
