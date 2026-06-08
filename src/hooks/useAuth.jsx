@@ -58,6 +58,40 @@ export function AuthProvider({ children }) {
     logActivity(leagueId, ACTIVITY_TYPES.LEAGUE_CREATED, `League "${leagueName}" created`);
   }
 
+  function _blankLeague(leagueId, leagueName) {
+    if (load(leagueKey(leagueId, 'initialized'))) return;
+    const newLeague = {
+      id: leagueId,
+      name: leagueName || 'My Golf League',
+      season: new Date().getFullYear().toString(),
+      startDate: new Date().toISOString().slice(0, 10),
+      endDate: `${new Date().getFullYear()}-12-31`,
+      scoringFormats: ['stroke'],
+      handicapSystem: 'whs',
+      handicapAllowance: 0.95,
+      skinsType: 'net',
+      skinsEnabled: true,
+      skinsEntry: 5,
+      ctpEnabled: true,
+      ctpHoles: [3, 7, 12, 16],
+      pointsTable: [
+        { place: 1, points: 10 }, { place: 2, points: 8 },
+        { place: 3, points: 6 }, { place: 4, points: 4 }, { place: 5, points: 2 }
+      ],
+      inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
+      isPublic: false,
+      onboardingComplete: false,
+    };
+    save(leagueKey(leagueId, 'league'), newLeague);
+    save(leagueKey(leagueId, 'players'), []);
+    save(leagueKey(leagueId, 'rounds'), []);
+    save(leagueKey(leagueId, 'courses'), []);
+    save(leagueKey(leagueId, 'teams'), []);
+    save(leagueKey(leagueId, 'activity'), []);
+    save(leagueKey(leagueId, 'schedule'), []);
+    save(leagueKey(leagueId, 'initialized'), true);
+  }
+
   function register({ name, email, password, leagueName }) {
     const users = load(GLOBAL.users) || [];
     if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
@@ -71,7 +105,29 @@ export function AuthProvider({ children }) {
       leagueIds: [leagueId],
       createdAt: new Date().toISOString(),
     };
-    _seedLeague(leagueId, leagueName || 'My Golf League');
+    _blankLeague(leagueId, leagueName || 'My Golf League');
+    _persistUser(newUser);
+    const session = { userId, leagueId };
+    save(GLOBAL.session, session);
+    setActiveLeagueIdState(leagueId);
+  }
+
+  function registerDemo({ name, email, password, leagueName }) {
+    const users = load(GLOBAL.users) || [];
+    if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+      // Demo user already exists — just log them in
+      login({ email, password });
+      return;
+    }
+    const leagueId = `league_${Date.now()}`;
+    const userId = `user_${Date.now()}`;
+    const newUser = {
+      id: userId, name, email,
+      passwordHash: btoa(unescape(encodeURIComponent(password))),
+      leagueIds: [leagueId],
+      createdAt: new Date().toISOString(),
+    };
+    _seedLeague(leagueId, leagueName || 'Westside Golf League');
     _persistUser(newUser);
     const session = { userId, leagueId };
     save(GLOBAL.session, session);
@@ -127,7 +183,7 @@ export function AuthProvider({ children }) {
   function createLeague(leagueName) {
     if (!user) return;
     const leagueId = `league_${Date.now()}`;
-    _seedLeague(leagueId, leagueName);
+    _blankLeague(leagueId, leagueName);
     const updated = { ...user, leagueIds: [...(user.leagueIds || []), leagueId] };
     _persistUser(updated);
     save(GLOBAL.session, { userId: user.id, leagueId });
@@ -146,7 +202,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, activeLeagueId, loading,
-      register, login, logout, joinLeague, switchLeague, createLeague, getLeagueName,
+      register, registerDemo, login, logout, joinLeague, switchLeague, createLeague, getLeagueName,
     }}>
       {children}
     </AuthContext.Provider>

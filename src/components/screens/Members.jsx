@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UserPlus, Edit2, Trash2, Copy, Check, Mail } from 'lucide-react';
+import { UserPlus, Users, Edit2, Trash2, Copy, Check, Mail } from 'lucide-react';
 import { TopBar } from '../layout/TopBar';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -9,10 +9,28 @@ import { Input } from '../ui/Input';
 
 export function Members({ players, setPlayers, rounds, league }) {
   const [showInvite, setShowInvite] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importPreview, setImportPreview] = useState([]);
   const [editPlayer, setEditPlayer] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [copied, setCopied] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+
+  const parseImportText = (text) => {
+    return text
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0)
+      .map(line => {
+        const parts = line.split(',').map(p => p.trim());
+        const name = parts[0] || '';
+        const handicapIndex = parts[1] !== undefined && parts[1] !== '' ? parseFloat(parts[1]) : 18.0;
+        const email = parts[2] || '';
+        return { name, handicapIndex: isNaN(handicapIndex) ? 18.0 : handicapIndex, email };
+      })
+      .filter(p => p.name.length > 0);
+  };
 
   const getRoundsPlayed = (pid) => rounds.filter(r => r.playerIds.includes(pid)).length;
   const getAvgScore = (pid) => {
@@ -59,6 +77,10 @@ export function Members({ players, setPlayers, rounds, league }) {
   return (
     <div className="flex-1 overflow-y-auto pb-20 lg:pb-6" style={{ backgroundColor: 'var(--color-bg)' }}>
       <TopBar title="Members" subtitle={`${players.length} players in league`}>
+        <Button variant="secondary" size="md" onClick={() => setShowImport(true)}>
+          <Users size={15} className="mr-1.5" />
+          Import Players
+        </Button>
         <Button variant="secondary" size="md" onClick={() => setShowInvite(true)}>
           <UserPlus size={15} className="mr-1.5" />
           Invite Player
@@ -199,6 +221,70 @@ export function Members({ players, setPlayers, rounds, league }) {
             <Mail size={14} className="mr-2" />
             Send Invite Email
           </Button>
+        </div>
+      </Modal>
+
+      {/* Import Players Modal */}
+      <Modal isOpen={showImport} onClose={() => { setShowImport(false); setImportText(''); setImportPreview([]); }} title="Import Players" size="md">
+        <div className="space-y-4">
+          <textarea
+            className="w-full px-3 py-2 rounded-lg border text-sm font-mono resize-y"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', minHeight: '120px' }}
+            placeholder={"Paste player names — one per line. Optionally: Name, Handicap or Name, Handicap, Email"}
+            value={importText}
+            onChange={e => {
+              setImportText(e.target.value);
+              setImportPreview(parseImportText(e.target.value));
+            }}
+          />
+          {importPreview.length > 0 && (
+            <div className="rounded-lg overflow-hidden border" style={{ borderColor: 'var(--color-border)' }}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--color-bg)', borderBottom: '1px solid var(--color-border)' }}>
+                    {['Name', 'HCP', 'Email'].map(h => (
+                      <th key={h} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {importPreview.map((p, i) => (
+                    <tr key={i} style={{ borderBottom: i < importPreview.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                      <td className="px-3 py-2 font-medium" style={{ color: 'var(--color-text)' }}>{p.name}</td>
+                      <td className="px-3 py-2" style={{ color: 'var(--color-primary)' }}>{p.handicapIndex}</td>
+                      <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>{p.email || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="secondary" onClick={() => { setShowImport(false); setImportText(''); setImportPreview([]); }}>Cancel</Button>
+            <Button
+              variant="primary"
+              disabled={importPreview.length === 0}
+              onClick={() => {
+                setPlayers(prev => [
+                  ...prev,
+                  ...importPreview.map(p => ({
+                    id: 'player-' + Date.now() + Math.random(),
+                    name: p.name,
+                    email: p.email || '',
+                    handicapIndex: p.handicapIndex,
+                    teePreference: 'White',
+                    role: 'player',
+                    differentials: [],
+                  })),
+                ]);
+                setShowImport(false);
+                setImportText('');
+                setImportPreview([]);
+              }}
+            >
+              Add {importPreview.length} Player{importPreview.length !== 1 ? 's' : ''}
+            </Button>
+          </div>
         </div>
       </Modal>
 
