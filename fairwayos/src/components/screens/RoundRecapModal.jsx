@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import { X, Copy, Check, Trophy, DollarSign, Target, Star } from 'lucide-react';
+import { X, Copy, Check, Trophy, DollarSign, Target, Star, Share2 } from 'lucide-react';
 import { skinsSummary } from '../../utils/skins';
 
 function scoreStyle(gross, par) {
@@ -95,10 +95,17 @@ export function RoundRecapModal({ round, course, players, league, onClose }) {
   };
 
   const handleCopy = () => {
-    navigator.clipboard?.writeText(buildShareText()).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    const text = buildShareText();
+    if (navigator.share) {
+      navigator.share({ title: `Round Recap — ${course?.name || 'Golf'}`, text }).catch(() => {
+        navigator.clipboard?.writeText(text);
+      });
+    } else {
+      navigator.clipboard?.writeText(text).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
   };
 
   if (!round) return null;
@@ -218,7 +225,7 @@ export function RoundRecapModal({ round, course, players, league, onClose }) {
             onClick={handleCopy}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-all"
             style={{ backgroundColor: copied ? 'rgba(22,163,74,0.12)' : 'var(--color-primary)', color: copied ? '#16a34a' : 'white' }}>
-            {copied ? <><Check size={15} /> Copied!</> : <><Copy size={15} /> Copy Recap for Group Chat</>}
+            {copied ? <><Check size={15} /> Copied!</> : navigator.share ? <><Share2 size={15} /> Share Recap</> : <><Copy size={15} /> Copy Recap for Group Chat</>}
           </button>
         </div>
       </div>

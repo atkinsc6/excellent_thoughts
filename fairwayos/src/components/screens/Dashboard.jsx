@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -19,7 +19,11 @@ const ACTIVITY_ICONS = {
 };
 
 export function Dashboard({ league, players, rounds, courses, teams = [], activity = [], schedule = [], announcements = [] }) {
+  const [demoBannerDismissed, setDemoBannerDismissed] = useState(false);
   const { getDifferentials, getHandicapTrend } = useHandicap(players, rounds, courses);
+
+  const MOCK_NAMES = ['Mike Harrington', 'Dave Kowalski', 'Tom Reyes', 'Sarah Chen', 'Jim Callahan', 'Brad Novak', 'Chris Weston', 'Lisa Park'];
+  const isDemoData = players.filter(p => MOCK_NAMES.includes(p.name)).length >= 3;
 
   const stats = useMemo(() => {
     if (!rounds.length) return null;
@@ -244,6 +248,27 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
   return (
     <div className="flex-1 overflow-y-auto pb-20 lg:pb-6" style={{ backgroundColor: 'var(--color-bg)' }}>
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        {isDemoData && !demoBannerDismissed && (
+          <div className="flex items-start gap-3 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)' }}>
+            <span className="text-xl flex-shrink-0">🎭</span>
+            <div className="flex-1">
+              <div className="font-semibold text-sm" style={{ color: 'var(--color-text)', fontFamily: 'Cormorant Garamond, serif' }}>
+                You're viewing demo data
+              </div>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                This league has sample players and rounds. Go to{' '}
+                <Link to="/settings" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>Settings → New Season</Link>
+                {' '}to archive demo data and start fresh, or{' '}
+                <Link to="/members" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>Members</Link>
+                {' '}to import your real roster.
+              </p>
+            </div>
+            <button onClick={() => setDemoBannerDismissed(true)} className="flex-shrink-0 p-1 rounded hover:bg-red-100 transition-colors">
+              <span style={{ color: 'var(--color-muted)', fontSize: '16px' }}>×</span>
+            </button>
+          </div>
+        )}
+
         {/* Pinned Announcements */}
         {announcements.filter(a => a.pinned).map(ann => (
           <div key={ann.id} className="flex items-start gap-3 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(184,151,42,0.1)', border: '1px solid rgba(184,151,42,0.25)' }}>

@@ -7,12 +7,14 @@ import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
 import { logActivity, ACTIVITY_TYPES } from '../../utils/activity';
 
-export function LeagueSettings({ league, setLeague, rounds, setRounds, players, setPlayers, refreshActivity, archives = [], setArchives, announcements = [], setAnnouncements }) {
+export function LeagueSettings({ league, setLeague, rounds, setRounds, players, setPlayers, refreshActivity, archives = [], setArchives, announcements = [], setAnnouncements, courses = [], setCourses, teams = [], setTeams, schedule = [], setSchedule, ryderCups = [], setRyderCups }) {
   const [form, setForm] = useState({ ...league });
   const [saved, setSaved] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [expandedArchive, setExpandedArchive] = useState(null);
   const [announcementForm, setAnnouncementForm] = useState({ title: '', message: '', emoji: '📢', pinned: true });
+  const [importError, setImportError] = useState('');
+  const [importSuccess, setImportSuccess] = useState(false);
 
   // Season Transition Wizard state
   const [wizardStep, setWizardStep] = useState(null); // null | 0 | 1 | 2
@@ -53,7 +55,11 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
   };
 
   const exportData = () => {
-    const data = { league, players, rounds };
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      league, players, rounds, courses, teams, schedule, announcements, ryderCups,
+    };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -61,6 +67,35 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
     a.download = `fairwayos-${league?.name?.replace(/\s+/g, '-').toLowerCase() || 'export'}-${new Date().getFullYear()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const importData = (file) => {
+    if (!file) return;
+    setImportError('');
+    setImportSuccess(false);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (!data.league || !data.players) {
+          setImportError('Invalid file: missing league or players data.');
+          return;
+        }
+        setLeague(data.league);
+        setPlayers(data.players || []);
+        setRounds(data.rounds || []);
+        if (setCourses) setCourses(data.courses || []);
+        if (setTeams) setTeams(data.teams || []);
+        if (setSchedule) setSchedule(data.schedule || []);
+        if (setAnnouncements) setAnnouncements(data.announcements || []);
+        if (setRyderCups) setRyderCups(data.ryderCups || []);
+        setImportSuccess(true);
+        setTimeout(() => setImportSuccess(false), 3000);
+      } catch {
+        setImportError('Failed to parse file. Make sure it is a valid FairwayOS JSON export.');
+      }
+    };
+    reader.readAsText(file);
   };
 
   const resetSeason = () => {
@@ -565,6 +600,31 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
                 style={{ backgroundColor: 'var(--color-accent)' }}>
                 <Download size={13} /> Export
               </button>
+            </div>
+
+            <div className="p-3 rounded-lg border space-y-2" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Import League Data</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Restore from a FairwayOS JSON export to sync data across devices</div>
+                </div>
+                <label
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border"
+                  style={{ borderColor: 'var(--color-accent)', color: 'var(--color-accent)', backgroundColor: 'rgba(184,151,42,0.06)' }}>
+                  <Download size={13} className="rotate-180" /> Import
+                  <input type="file" accept=".json" className="hidden" onChange={e => { importData(e.target.files[0]); e.target.value = ''; }} />
+                </label>
+              </div>
+              {importError && (
+                <div className="p-2 rounded-lg text-xs" style={{ backgroundColor: 'rgba(220,38,38,0.08)', color: 'var(--color-danger)', border: '1px solid rgba(220,38,38,0.2)' }}>
+                  {importError}
+                </div>
+              )}
+              {importSuccess && (
+                <div className="p-2 rounded-lg text-xs" style={{ backgroundColor: 'rgba(22,163,74,0.08)', color: '#16A34A', border: '1px solid rgba(22,163,74,0.2)' }}>
+                  Data imported successfully!
+                </div>
+              )}
             </div>
 
             <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-accent)', backgroundColor: 'rgba(184,151,42,0.03)' }}>
