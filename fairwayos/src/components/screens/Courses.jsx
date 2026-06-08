@@ -6,11 +6,14 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
+import { COURSE_DATABASE } from '../../data/courses';
 
 export function Courses({ courses, setCourses, league, setLeague }) {
   const [search, setSearch] = useState('');
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [addTab, setAddTab] = useState('library');
+  const [librarySearch, setLibrarySearch] = useState('');
   const [addForm, setAddForm] = useState({ name: '', city: '', state: '', country: 'USA', par: 72, tees: [{ name: 'Blue', rating: 72.0, slope: 130, yardage: 6500 }] });
 
   const filtered = useMemo(() =>
@@ -246,69 +249,158 @@ export function Courses({ courses, setCourses, league, setLeague }) {
       </div>
 
       {/* Add Course Modal */}
-      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add Course" size="lg">
+      <Modal isOpen={showAdd} onClose={() => { setShowAdd(false); setLibrarySearch(''); setAddTab('library'); }} title="Add Course" size="lg">
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Course Name" value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} className="col-span-2" placeholder="e.g. Pebble Beach Golf Links" />
-            <Input label="City" value={addForm.city} onChange={e => setAddForm(f => ({ ...f, city: e.target.value }))} />
-            <Input label="State" value={addForm.state} onChange={e => setAddForm(f => ({ ...f, state: e.target.value }))} placeholder="IL" />
-            <Input label="Country" value={addForm.country} onChange={e => setAddForm(f => ({ ...f, country: e.target.value }))} />
-            <Input label="Par" type="number" value={addForm.par} onChange={e => setAddForm(f => ({ ...f, par: e.target.value }))} />
+          {/* Tab switcher */}
+          <div className="flex gap-1 p-1 rounded-lg" style={{ backgroundColor: 'var(--color-bg)' }}>
+            <button
+              onClick={() => setAddTab('library')}
+              className="flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+              style={{
+                backgroundColor: addTab === 'library' ? 'var(--color-primary)' : 'transparent',
+                color: addTab === 'library' ? 'white' : 'var(--color-muted)',
+              }}
+            >
+              Browse Library
+            </button>
+            <button
+              onClick={() => setAddTab('manual')}
+              className="flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+              style={{
+                backgroundColor: addTab === 'manual' ? 'var(--color-primary)' : 'transparent',
+                color: addTab === 'manual' ? 'white' : 'var(--color-muted)',
+              }}
+            >
+              Add Manually
+            </button>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Tees</label>
-              <Button variant="ghost" size="sm" onClick={addTee}>
-                <Plus size={13} className="mr-1" /> Add Tee
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {addForm.tees.map((tee, i) => (
-                <div key={i} className="grid grid-cols-5 gap-2 items-end">
+          {addTab === 'library' && (() => {
+            const existingIds = new Set(courses.map(c => c.id));
+            const unadded = COURSE_DATABASE.filter(c => !existingIds.has(c.id));
+            const lq = librarySearch.toLowerCase();
+            const displayed = librarySearch
+              ? unadded.filter(c =>
+                  c.name.toLowerCase().includes(lq) ||
+                  c.city.toLowerCase().includes(lq) ||
+                  c.state.toLowerCase().includes(lq)
+                )
+              : unadded.slice(0, 20);
+
+            return (
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-muted)' }} />
                   <input
-                    placeholder="Name"
-                    value={tee.name}
-                    onChange={e => updateTee(i, 'name', e.target.value)}
-                    className="px-2 py-1.5 rounded border text-sm"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    type="text"
+                    placeholder="Search by name or state..."
+                    value={librarySearch}
+                    onChange={e => setLibrarySearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 rounded-lg border text-sm"
+                    style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
                   />
-                  <input
-                    placeholder="Rating"
-                    type="number"
-                    value={tee.rating}
-                    onChange={e => updateTee(i, 'rating', e.target.value)}
-                    className="px-2 py-1.5 rounded border text-sm"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                  <input
-                    placeholder="Slope"
-                    type="number"
-                    value={tee.slope}
-                    onChange={e => updateTee(i, 'slope', e.target.value)}
-                    className="px-2 py-1.5 rounded border text-sm"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                  <input
-                    placeholder="Yardage"
-                    type="number"
-                    value={tee.yardage}
-                    onChange={e => updateTee(i, 'yardage', e.target.value)}
-                    className="px-2 py-1.5 rounded border text-sm"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                  <button onClick={() => removeTee(i)} className="p-1.5 rounded hover:bg-red-50">
-                    <X size={14} style={{ color: 'var(--color-danger)' }} />
-                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
+                {unadded.length === 0 ? (
+                  <p className="text-center py-8 text-sm" style={{ color: 'var(--color-muted)' }}>
+                    All courses from the library are already in your league.
+                  </p>
+                ) : displayed.length === 0 ? (
+                  <p className="text-center py-8 text-sm" style={{ color: 'var(--color-muted)' }}>
+                    No courses match your search.
+                  </p>
+                ) : (
+                  <div className="space-y-1 max-h-80 overflow-y-auto">
+                    {displayed.map(course => (
+                      <button
+                        key={course.id}
+                        onClick={() => { setCourses(prev => [...prev, course]); setShowAdd(false); setLibrarySearch(''); setAddTab('library'); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-all hover:shadow-sm"
+                        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-primary-light)'; e.currentTarget.style.backgroundColor = 'rgba(27,67,50,0.04)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.backgroundColor = 'var(--color-surface)'; }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm truncate" style={{ color: 'var(--color-text)' }}>{course.name}</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{course.city}, {course.state}</div>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0 text-xs" style={{ color: 'var(--color-muted)' }}>
+                          <span>Par {course.par}</span>
+                          <span>{course.tees.length} tees</span>
+                          <Plus size={14} style={{ color: 'var(--color-primary)' }} />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
-          <div className="flex gap-2 justify-end pt-2">
-            <Button variant="secondary" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button variant="primary" onClick={saveNewCourse}>Add Course</Button>
-          </div>
+          {addTab === 'manual' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Course Name" value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} className="col-span-2" placeholder="e.g. Pebble Beach Golf Links" />
+                <Input label="City" value={addForm.city} onChange={e => setAddForm(f => ({ ...f, city: e.target.value }))} />
+                <Input label="State" value={addForm.state} onChange={e => setAddForm(f => ({ ...f, state: e.target.value }))} placeholder="IL" />
+                <Input label="Country" value={addForm.country} onChange={e => setAddForm(f => ({ ...f, country: e.target.value }))} />
+                <Input label="Par" type="number" value={addForm.par} onChange={e => setAddForm(f => ({ ...f, par: e.target.value }))} />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Tees</label>
+                  <Button variant="ghost" size="sm" onClick={addTee}>
+                    <Plus size={13} className="mr-1" /> Add Tee
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {addForm.tees.map((tee, i) => (
+                    <div key={i} className="grid grid-cols-5 gap-2 items-end">
+                      <input
+                        placeholder="Name"
+                        value={tee.name}
+                        onChange={e => updateTee(i, 'name', e.target.value)}
+                        className="px-2 py-1.5 rounded border text-sm"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      />
+                      <input
+                        placeholder="Rating"
+                        type="number"
+                        value={tee.rating}
+                        onChange={e => updateTee(i, 'rating', e.target.value)}
+                        className="px-2 py-1.5 rounded border text-sm"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      />
+                      <input
+                        placeholder="Slope"
+                        type="number"
+                        value={tee.slope}
+                        onChange={e => updateTee(i, 'slope', e.target.value)}
+                        className="px-2 py-1.5 rounded border text-sm"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      />
+                      <input
+                        placeholder="Yardage"
+                        type="number"
+                        value={tee.yardage}
+                        onChange={e => updateTee(i, 'yardage', e.target.value)}
+                        className="px-2 py-1.5 rounded border text-sm"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      />
+                      <button onClick={() => removeTee(i)} className="p-1.5 rounded hover:bg-red-50">
+                        <X size={14} style={{ color: 'var(--color-danger)' }} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="secondary" onClick={() => setShowAdd(false)}>Cancel</Button>
+                <Button variant="primary" onClick={saveNewCourse}>Add Course</Button>
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
     </div>

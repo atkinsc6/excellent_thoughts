@@ -23,6 +23,7 @@ import { TeeSheet } from './components/screens/TeeSheet';
 import { PublicLeague } from './components/screens/PublicLeague';
 import { Login } from './components/screens/Login';
 import { RyderCup } from './components/screens/RyderCup';
+import { OnboardingWizard } from './components/screens/OnboardingWizard';
 
 function OfflineBanner() {
   const isOnline = useOnlineStatus();
@@ -65,6 +66,22 @@ function AppShell() {
           <div className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading your league...</div>
         </div>
       </div>
+    );
+  }
+
+  // Show onboarding wizard for new leagues
+  if (league && !league.onboardingComplete) {
+    return (
+      <OnboardingWizard
+        league={league}
+        setLeague={setLeague}
+        players={players}
+        setPlayers={setPlayers}
+        courses={courses}
+        setCourses={setCourses}
+        schedule={schedule}
+        setSchedule={setSchedule}
+      />
     );
   }
 
