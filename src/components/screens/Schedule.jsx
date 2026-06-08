@@ -4,12 +4,13 @@ import {
   format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval,
   isSameDay, isBefore, addMonths, subMonths, startOfWeek, endOfWeek,
 } from 'date-fns';
-import { CalendarDays, List, Plus, ChevronLeft, ChevronRight, MapPin, Users, Shuffle, LayoutGrid } from 'lucide-react';
+import { CalendarDays, List, Plus, ChevronLeft, ChevronRight, MapPin, Users, Shuffle, LayoutGrid, Check, X, HelpCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { TopBar } from '../layout/TopBar';
+import { useAuth } from '../../hooks/useAuth';
 
 const FORMAT_LABELS = {
   individual: 'Individual',
@@ -21,6 +22,7 @@ const FORMAT_LABELS = {
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function Schedule({ league, courses, players = [], schedule, setSchedule }) {
+  const { user } = useAuth();
   const [view, setView] = useState('list');
   const [calMonth, setCalMonth] = useState(startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = useState(null);
@@ -149,6 +151,30 @@ export function Schedule({ league, courses, players = [], schedule, setSchedule 
     setGroupDraft(updated);
   };
 
+  const currentPlayer = players.find(p => p.email === user?.email);
+  const handleRsvp = (eventId, status) => {
+    if (!currentPlayer) return;
+    setSchedule(prev => (prev || []).map(e => {
+      if (e.id !== eventId) return e;
+      const rsvps = { ...(e.rsvps || {}) };
+      if (rsvps[currentPlayer.id] === status) {
+        delete rsvps[currentPlayer.id];
+      } else {
+        rsvps[currentPlayer.id] = status;
+      }
+      return { ...e, rsvps };
+    }));
+  };
+
+  const rsvpCounts = (event) => {
+    const rsvps = event.rsvps || {};
+    return {
+      yes: Object.values(rsvps).filter(v => v === 'yes').length,
+      maybe: Object.values(rsvps).filter(v => v === 'maybe').length,
+      no: Object.values(rsvps).filter(v => v === 'no').length,
+    };
+  };
+
   return (
     <div className="flex-1 overflow-y-auto pb-20 lg:pb-6" style={{ backgroundColor: 'var(--color-bg)' }}>
       <TopBar title="Schedule" subtitle={`${sorted.length} event${sorted.length !== 1 ? 's' : ''} this season`}>
@@ -216,6 +242,35 @@ export function Schedule({ league, courses, players = [], schedule, setSchedule 
                       </div>
                     )}
                     {event.notes && <p className="text-sm mt-1.5" style={{ color: 'var(--color-muted)' }}>{event.notes}</p>}
+
+                    {!isPast && currentPlayer && (
+                      <div className="flex items-center gap-2 mt-2.5">
+                        <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>RSVP:</span>
+                        {[
+                          { status: 'yes', icon: Check, label: 'Going', color: '#16a34a', bg: 'rgba(22,163,74,0.12)' },
+                          { status: 'maybe', icon: HelpCircle, label: 'Maybe', color: 'var(--color-accent)', bg: 'rgba(184,151,42,0.12)' },
+                          { status: 'no', icon: X, label: 'Can\'t', color: 'var(--color-danger)', bg: 'rgba(220,38,38,0.08)' },
+                        ].map(({ status, icon: Icon, label, color, bg }) => {
+                          const myRsvp = (event.rsvps || {})[currentPlayer.id];
+                          const active = myRsvp === status;
+                          return (
+                            <button key={status} onClick={() => handleRsvp(event.id, status)}
+                              className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all"
+                              style={{ backgroundColor: active ? bg : 'transparent', color: active ? color : 'var(--color-muted)', border: `1px solid ${active ? color : 'var(--color-border)'}` }}>
+                              <Icon size={10} />{label}
+                            </button>
+                          );
+                        })}
+                        {(() => { const c = rsvpCounts(event); return c.yes + c.maybe + c.no > 0 ? (
+                          <span className="text-xs ml-1" style={{ color: 'var(--color-muted)' }}>
+                            {c.yes > 0 && <span className="text-green-600 mr-1">{c.yes}✓</span>}
+                            {c.maybe > 0 && <span style={{ color: 'var(--color-accent)' }} className="mr-1">{c.maybe}?</span>}
+                            {c.no > 0 && <span style={{ color: 'var(--color-danger)' }}>{c.no}✗</span>}
+                          </span>
+                        ) : null; })()}
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-3 mt-2">
                       <button
                         onClick={() => openGroupsModal(event.id)}

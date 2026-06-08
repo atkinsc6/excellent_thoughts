@@ -7,11 +7,12 @@ import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
 import { logActivity, ACTIVITY_TYPES } from '../../utils/activity';
 
-export function LeagueSettings({ league, setLeague, rounds, setRounds, players, setPlayers, refreshActivity, archives = [], setArchives }) {
+export function LeagueSettings({ league, setLeague, rounds, setRounds, players, setPlayers, refreshActivity, archives = [], setArchives, announcements = [], setAnnouncements }) {
   const [form, setForm] = useState({ ...league });
   const [saved, setSaved] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [expandedArchive, setExpandedArchive] = useState(null);
+  const [announcementForm, setAnnouncementForm] = useState({ title: '', message: '', emoji: '📢', pinned: true });
 
   // Season Transition Wizard state
   const [wizardStep, setWizardStep] = useState(null); // null | 0 | 1 | 2
@@ -685,6 +686,71 @@ export function LeagueSettings({ league, setLeague, rounds, setRounds, players, 
             </div>
           </Section>
         )}
+
+        {/* Announcements */}
+        <Section title="Announcements">
+          <div className="space-y-3">
+            {announcements.length > 0 && (
+              <div className="space-y-2">
+                {announcements.map(ann => (
+                  <div key={ann.id} className="flex items-start gap-3 px-3 py-2.5 rounded-lg border" style={{ borderColor: 'var(--color-border)', backgroundColor: ann.pinned ? 'rgba(184,151,42,0.06)' : 'var(--color-bg)' }}>
+                    <span className="text-xl flex-shrink-0">{ann.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{ann.title}</div>
+                      {ann.message && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{ann.message}</p>}
+                      <div className="flex gap-2 mt-1">
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{new Date(ann.createdAt).toLocaleDateString()}</span>
+                        {ann.pinned && <span className="text-xs font-medium" style={{ color: 'var(--color-accent)' }}>📌 Pinned</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => setAnnouncements(prev => prev.map(a => a.id === ann.id ? { ...a, pinned: !a.pinned } : a))}
+                        className="px-2 py-1 text-xs rounded border"
+                        style={{ borderColor: 'var(--color-border)', color: ann.pinned ? 'var(--color-accent)' : 'var(--color-muted)' }}>
+                        {ann.pinned ? 'Unpin' : 'Pin'}
+                      </button>
+                      <button
+                        onClick={() => setAnnouncements(prev => prev.filter(a => a.id !== ann.id))}
+                        className="p-1 rounded hover:bg-red-50 transition-colors"
+                        style={{ color: 'var(--color-danger)' }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="p-3 rounded-lg border space-y-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
+              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>New Announcement</div>
+              <div className="flex gap-2">
+                <input value={announcementForm.emoji} onChange={e => setAnnouncementForm(f => ({ ...f, emoji: e.target.value }))}
+                  className="w-12 text-center px-1 py-2 rounded border text-sm" style={{ borderColor: 'var(--color-border)' }} maxLength={2} />
+                <input value={announcementForm.title} onChange={e => setAnnouncementForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="Title" className="flex-1 px-3 py-2 rounded border text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </div>
+              <textarea value={announcementForm.message} onChange={e => setAnnouncementForm(f => ({ ...f, message: e.target.value }))}
+                placeholder="Message (optional)" rows={2}
+                className="w-full px-3 py-2 rounded border text-sm resize-none" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={announcementForm.pinned} onChange={e => setAnnouncementForm(f => ({ ...f, pinned: e.target.checked }))} className="accent-green-700" />
+                  <span style={{ color: 'var(--color-text)' }}>Pin to dashboard</span>
+                </label>
+                <button
+                  onClick={() => {
+                    if (!announcementForm.title.trim()) return;
+                    setAnnouncements(prev => [{ id: Date.now().toString(), ...announcementForm, createdAt: new Date().toISOString() }, ...(prev || [])]);
+                    setAnnouncementForm({ title: '', message: '', emoji: '📢', pinned: true });
+                  }}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white"
+                  style={{ backgroundColor: 'var(--color-primary)' }}>
+                  <Plus size={12} className="inline mr-1" />Post
+                </button>
+              </div>
+            </div>
+          </div>
+        </Section>
 
         <div className="flex justify-end pt-2">
           <Button variant="primary" size="lg" onClick={save}>

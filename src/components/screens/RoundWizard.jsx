@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RoundRecapModal } from './RoundRecapModal';
 import { format } from 'date-fns';
 import { ChevronRight, ChevronLeft, Check, Star, Trophy, DollarSign, Plus, X, BarChart2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
@@ -136,6 +137,10 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
   const [statsEnabled, setStatsEnabled] = useState(false);
   const [shotStats, setShotStats] = useState({}); // { [playerId]: { putts[], gir[], fh[] } }
 
+  // Round notes + recap
+  const [notesDraft, setNotesDraft] = useState('');
+  const [recapRound, setRecapRound] = useState(null);
+
   const course = useMemo(() => courses.find(c => c.id === selectedCourseId), [courses, selectedCourseId]);
   const selectedPlayers = useMemo(() => players.filter(p => selectedPlayerIds.includes(p.id)), [players, selectedPlayerIds]);
   const activeCtpHoles = overrideCtpHoles ? customCtpHoles : (league?.ctpHoles || []);
@@ -268,6 +273,7 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
       ctpHoles: overrideCtpHoles ? customCtpHoles : undefined,
       finalized: true,
       finalizedAt: new Date().toISOString(),
+      notes: notesDraft.trim() || undefined,
     };
 
     if (selectedFormat === 'match') {
@@ -325,7 +331,7 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
       `Round at ${course?.name || 'Unknown Course'} finalized — ${selectedPlayers.length} players`
     );
     refreshActivity?.();
-    navigate('/leaderboard');
+    setRecapRound(round);
   }
 
   // Better ball: per-hole best net per team
@@ -1156,6 +1162,22 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
               </Card>
             )}
 
+            {/* Round Notes */}
+            <Card>
+              <CardHeader><CardTitle>Round Notes</CardTitle></CardHeader>
+              <textarea
+                value={notesDraft}
+                onChange={e => setNotesDraft(e.target.value)}
+                placeholder="Add a note about this round — memorable moments, course conditions, weather, etc."
+                className="w-full mt-2 px-3 py-2 rounded-lg border text-sm resize-none"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', backgroundColor: 'var(--color-bg)', minHeight: '80px' }}
+                maxLength={500}
+              />
+              {notesDraft.length > 0 && (
+                <div className="text-xs mt-1 text-right" style={{ color: 'var(--color-muted)' }}>{notesDraft.length}/500</div>
+              )}
+            </Card>
+
             <div className="flex justify-between">
               <button onClick={() => setStep(1)} className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
                 <ChevronLeft size={14} /> Back
@@ -1170,6 +1192,16 @@ export function RoundWizard({ league, players, rounds, setRounds, courses, teams
           </div>
         )}
       </div>
+
+      {recapRound && (
+        <RoundRecapModal
+          round={recapRound}
+          course={courses.find(c => c.id === recapRound.courseId)}
+          players={players}
+          league={league}
+          onClose={() => { setRecapRound(null); navigate('/leaderboard'); }}
+        />
+      )}
     </div>
   );
 }
