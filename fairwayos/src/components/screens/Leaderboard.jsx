@@ -47,6 +47,15 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
         const course = courses.find(c => c.id === r.courseId);
         return s + ps.grossScores.filter((g, i) => g <= course?.holes[i]?.par - 2).length;
       }, 0);
+      // Rolling 3-round avg net and trend
+      const sortedPr = [...pr].sort((a, b) => new Date(b.date) - new Date(a.date));
+      const getNet = r => r.scores?.find(sc => sc.playerId === p.id)?.totalNet || 0;
+      const recent3 = sortedPr.slice(0, 3);
+      const prior3 = sortedPr.slice(3, 6);
+      const rolling3Avg = recent3.length ? (recent3.reduce((s, r) => s + getNet(r), 0) / recent3.length) : null;
+      const prior3Avg = prior3.length ? (prior3.reduce((s, r) => s + getNet(r), 0) / prior3.length) : null;
+      const trend = rolling3Avg === null ? null : prior3Avg === null ? null : rolling3Avg < prior3Avg - 0.5 ? 'up' : rolling3Avg > prior3Avg + 0.5 ? 'down' : 'flat';
+
       return {
         id: p.id,
         name: p.name,
@@ -58,6 +67,8 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
         bestNet: pr.length ? Math.min(...pr.map(r => r.scores?.find(sc => sc.playerId === p.id)?.totalNet || 999)) : '-',
         birdies,
         eagles,
+        rolling3Avg: rolling3Avg !== null ? rolling3Avg.toFixed(1) : null,
+        trend,
         sortValue: scoreType === 'gross' ? (n ? totalGross / n : 999)
           : scoreType === 'net' ? (n ? totalNet / n : 999)
           : (n ? -totalStab / n : 999),
@@ -410,6 +421,7 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Rounds</th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Avg Gross</th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Avg Net</th>
+                      <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Form</th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Stableford</th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Eagles</th>
                       <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Birdies</th>
@@ -453,6 +465,16 @@ export function Leaderboard({ players, rounds, courses, teams = [], league }) {
                         <td className="px-3 py-3 text-center" style={{ color: 'var(--color-muted)' }}>{row.rounds}</td>
                         <td className="px-3 py-3 text-center" style={{ color: 'var(--color-text)' }}>{row.avgGross}</td>
                         <td className="px-3 py-3 text-center font-semibold" style={{ color: 'var(--color-primary)' }}>{row.avgNet}</td>
+                        <td className="px-3 py-3 text-center">
+                          {row.rolling3Avg !== null ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span className="text-xs font-semibold" style={{ color: row.trend === 'up' ? '#16a34a' : row.trend === 'down' ? 'var(--color-danger)' : 'var(--color-text)' }}>
+                                {row.rolling3Avg}
+                              </span>
+                              <span className="text-xs">{row.trend === 'up' ? '📈' : row.trend === 'down' ? '📉' : '➡️'}</span>
+                            </span>
+                          ) : <span style={{ color: 'var(--color-muted)' }}>—</span>}
+                        </td>
                         <td className="px-3 py-3 text-center" style={{ color: 'var(--color-text)' }}>{row.totalStab}</td>
                         <td className="px-3 py-3 text-center" style={{ color: row.eagles > 0 ? '#7C3AED' : 'var(--color-muted)' }}>{row.eagles}</td>
                         <td className="px-3 py-3 text-center" style={{ color: row.birdies > 0 ? '#16A34A' : 'var(--color-muted)' }}>{row.birdies}</td>

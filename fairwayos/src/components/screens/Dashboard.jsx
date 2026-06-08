@@ -18,7 +18,7 @@ const ACTIVITY_ICONS = {
   settings_updated: '⚙️', team_created: '👥', league_created: '🏆',
 };
 
-export function Dashboard({ league, players, rounds, courses, teams = [], activity = [], schedule = [] }) {
+export function Dashboard({ league, players, rounds, courses, teams = [], activity = [], schedule = [], announcements = [] }) {
   const { getDifferentials, getHandicapTrend } = useHandicap(players, rounds, courses);
 
   const stats = useMemo(() => {
@@ -117,6 +117,23 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
   const secondHalfStandings = useMemo(() => buildHalfStandings(secondHalf), [secondHalf, players, league]);
 
   const awards = useMemo(() => calcSeasonAwards(players, rounds, courses, league), [players, rounds, courses, league]);
+
+  // Form Leaders: last 3 rounds avg net per player + trend vs prior 3
+  const formLeaders = useMemo(() => {
+    const sortedRounds = [...rounds].sort((a, b) => new Date(b.date) - new Date(a.date));
+    return players.map(p => {
+      const playerRounds = sortedRounds.filter(r => r.playerIds?.includes(p.id));
+      if (playerRounds.length < 2) return null;
+      const recent3 = playerRounds.slice(0, 3);
+      const prior3 = playerRounds.slice(3, 6);
+      const recentAvg = recent3.reduce((s, r) => s + (r.scores?.find(sc => sc.playerId === p.id)?.totalNet || 0), 0) / recent3.length;
+      const priorAvg = prior3.length
+        ? prior3.reduce((s, r) => s + (r.scores?.find(sc => sc.playerId === p.id)?.totalNet || 0), 0) / prior3.length
+        : null;
+      const trend = priorAvg === null ? 'neutral' : recentAvg < priorAvg - 1 ? 'up' : recentAvg > priorAvg + 1 ? 'down' : 'neutral';
+      return { id: p.id, name: p.name, recentAvg: Math.round(recentAvg * 10) / 10, trend, rounds: recent3.length };
+    }).filter(Boolean).sort((a, b) => a.recentAvg - b.recentAvg).slice(0, 5);
+  }, [players, rounds]);
 
   // Recent round
   const recentRound = useMemo(() => {
@@ -227,6 +244,17 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
   return (
     <div className="flex-1 overflow-y-auto pb-20 lg:pb-6" style={{ backgroundColor: 'var(--color-bg)' }}>
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        {/* Pinned Announcements */}
+        {announcements.filter(a => a.pinned).map(ann => (
+          <div key={ann.id} className="flex items-start gap-3 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(184,151,42,0.1)', border: '1px solid rgba(184,151,42,0.25)' }}>
+            <span className="text-xl flex-shrink-0 mt-0.5">{ann.emoji || '📢'}</span>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm" style={{ color: 'var(--color-text)', fontFamily: 'Cormorant Garamond, serif' }}>{ann.title}</div>
+              {ann.message && <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>{ann.message}</p>}
+            </div>
+          </div>
+        ))}
+
         {/* Season Stats Bar */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {statCards.map((sc, i) => (
@@ -447,6 +475,29 @@ export function Dashboard({ league, players, rounds, courses, teams = [], activi
                       <div className="mt-1.5 text-xs text-center" style={{ color: 'var(--color-muted)' }}>
                         Avg net {team.avgNet || '—'}
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Form Leaders */}
+            {formLeaders.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🔥</span>
+                    <CardTitle>Hot Form</CardTitle>
+                  </div>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Last 3-round avg net</p>
+                </CardHeader>
+                <div className="space-y-2 mt-2">
+                  {formLeaders.map((f, i) => (
+                    <div key={f.id} className="flex items-center gap-3 py-1.5 px-2 rounded-lg" style={{ backgroundColor: i === 0 ? 'rgba(22,163,74,0.06)' : 'transparent' }}>
+                      <span className="text-base flex-shrink-0">{f.trend === 'up' ? '📈' : f.trend === 'down' ? '📉' : '➡️'}</span>
+                      <span className="flex-1 text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{f.name.split(' ')[0]}</span>
+                      <span className="text-sm font-bold" style={{ color: i === 0 ? '#16a34a' : 'var(--color-primary)' }}>{f.recentAvg}</span>
+                      {i === 0 && <span className="text-xs px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'rgba(22,163,74,0.15)', color: '#16a34a' }}>Hot 🔥</span>}
                     </div>
                   ))}
                 </div>

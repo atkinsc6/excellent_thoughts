@@ -13,6 +13,8 @@ function leagueKeys(leagueId) {
     archives: `fos_${leagueId}_archives`,
     initialized: `fos_${leagueId}_initialized`,
     notifRead: `fos_${leagueId}_notif_read`,
+    announcements: `fos_${leagueId}_announcements`,
+    ryderCups: `fos_${leagueId}_ryder_cups`,
   };
 }
 
@@ -32,6 +34,8 @@ export function useLeague(leagueId) {
   const [activity, setActivityState] = useState([]);
   const [schedule, setScheduleState] = useState([]);
   const [archives, setArchivesState] = useState([]);
+  const [announcements, setAnnouncementsState] = useState([]);
+  const [ryderCups, setRyderCupsState] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,6 +60,8 @@ export function useLeague(leagueId) {
       setActivityState(mock.activity || []);
       setScheduleState(mock.schedule || []);
       setArchivesState([]);
+      setAnnouncementsState([]);
+      setRyderCupsState([]);
     } else {
       setLeagueState(load(KEYS.league));
       setPlayersState(load(KEYS.players) || []);
@@ -65,6 +71,8 @@ export function useLeague(leagueId) {
       setActivityState(load(KEYS.activity) || []);
       setScheduleState(load(KEYS.schedule) || []);
       setArchivesState(load(KEYS.archives) || []);
+      setAnnouncementsState(load(KEYS.announcements) || []);
+      setRyderCupsState(load(KEYS.ryderCups) || []);
     }
     setLoading(false);
   }, [leagueId]);
@@ -117,6 +125,16 @@ export function useLeague(leagueId) {
     setArchivesState(next);
     if (leagueId) save(leagueKeys(leagueId).archives, next);
   }
+  function setAnnouncements(val) {
+    const next = typeof val === 'function' ? val(announcements) : val;
+    setAnnouncementsState(next);
+    if (leagueId) save(leagueKeys(leagueId).announcements, next);
+  }
+  function setRyderCups(val) {
+    const next = typeof val === 'function' ? val(ryderCups) : val;
+    setRyderCupsState(next);
+    if (leagueId) save(leagueKeys(leagueId).ryderCups, next);
+  }
 
   function getNotifReadAt() {
     if (!leagueId) return null;
@@ -149,6 +167,8 @@ export function useLeague(leagueId) {
     activity, setActivity, refreshActivity,
     schedule, setSchedule,
     archives, setArchives,
+    announcements, setAnnouncements,
+    ryderCups, setRyderCups,
     loading,
     getNotifReadAt, markNotifsRead,
     resetData,

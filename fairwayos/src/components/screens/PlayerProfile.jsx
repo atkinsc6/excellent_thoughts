@@ -12,6 +12,7 @@ import { useHandicap } from '../../hooks/useHandicap';
 import { useAuth } from '../../hooks/useAuth';
 import { seasonSkinsTotals } from '../../utils/skins';
 import { aggregateStats } from '../../utils/scoring';
+import { calcAchievements, ACHIEVEMENT_DEFS } from '../../utils/achievements';
 
 export function PlayerProfile({ league, players, setPlayers, rounds, courses, teams }) {
   const { playerId } = useParams();
@@ -111,6 +112,12 @@ export function PlayerProfile({ league, players, setPlayers, rounds, courses, te
       .filter(r => r.played > 0)
       .sort((a, b) => b.played - a.played);
   }, [players, rounds, playerId]);
+
+  const achievements = useMemo(() => {
+    if (!player) return [];
+    const all = calcAchievements(players, rounds, courses);
+    return all.filter(a => a.playerId === playerId);
+  }, [player, players, rounds, courses, playerId]);
 
   const openEditModal = () => {
     setEditForm({ name: player.name, handicapIndex: String(player.handicapIndex) });
@@ -317,6 +324,30 @@ export function PlayerProfile({ league, players, setPlayers, rounds, courses, te
                   <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{s.sub}</div>
                 </div>
               ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Achievements */}
+        {achievements.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Achievements</CardTitle>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{achievements.length} badge{achievements.length !== 1 ? 's' : ''} earned</p>
+            </CardHeader>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {achievements.map(a => {
+                const def = ACHIEVEMENT_DEFS[a.achievementId];
+                if (!def) return null;
+                return (
+                  <div key={a.achievementId} title={def.desc}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium cursor-default"
+                    style={{ backgroundColor: 'rgba(184,151,42,0.1)', border: '1px solid rgba(184,151,42,0.2)', color: 'var(--color-text)' }}>
+                    <span className="text-base leading-none">{def.emoji}</span>
+                    <span>{def.title}</span>
+                  </div>
+                );
+              })}
             </div>
           </Card>
         )}

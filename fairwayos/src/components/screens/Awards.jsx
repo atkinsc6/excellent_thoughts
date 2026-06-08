@@ -1,14 +1,21 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Printer, Award } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
 import { TopBar } from '../layout/TopBar';
 import { calcSeasonAwards } from '../../utils/awards';
+import { calcAchievements, achievementsByPlayer, ACHIEVEMENT_DEFS } from '../../utils/achievements';
 
 export function Awards({ league, players, rounds, courses }) {
   const awards = useMemo(
     () => calcSeasonAwards(players, rounds, courses, league),
     [players, rounds, courses, league]
   );
+
+  const achievementsMap = useMemo(() => {
+    const all = calcAchievements(players, rounds, courses);
+    return achievementsByPlayer(all);
+  }, [players, rounds, courses]);
 
   return (
     <div className="flex-1 overflow-y-auto pb-20 lg:pb-6" style={{ backgroundColor: 'var(--color-bg)' }}>
@@ -25,7 +32,7 @@ export function Awards({ league, players, rounds, courses }) {
         </button>
       </TopBar>
 
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="p-6 max-w-6xl mx-auto space-y-8">
         {awards.length === 0 ? (
           <Card>
             <div className="py-16 text-center">
@@ -43,6 +50,43 @@ export function Awards({ league, players, rounds, courses }) {
             {awards.map(award => (
               <AwardCard key={award.id} award={award} />
             ))}
+          </div>
+        )}
+
+        {/* Player Achievements */}
+        {Object.keys(achievementsMap).length > 0 && (
+          <div>
+            <h2 className="text-2xl font-bold mb-4" style={{ fontFamily: 'Cormorant Garamond, serif', color: 'var(--color-text)' }}>
+              Player Achievements
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {players.filter(p => achievementsMap[p.id]?.length > 0).map(player => (
+                <Card key={player.id}>
+                  <div className="flex items-center justify-between mb-3">
+                    <Link to={`/profile/${player.id}`} className="font-semibold text-base hover:underline" style={{ fontFamily: 'Cormorant Garamond, serif', color: 'var(--color-text)' }}>
+                      {player.name}
+                    </Link>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(184,151,42,0.12)', color: 'var(--color-accent)' }}>
+                      {achievementsMap[player.id].length} badge{achievementsMap[player.id].length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {achievementsMap[player.id].map(a => {
+                      const def = ACHIEVEMENT_DEFS[a.achievementId];
+                      if (!def) return null;
+                      return (
+                        <div key={a.achievementId} title={def.desc}
+                          className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium cursor-default"
+                          style={{ backgroundColor: 'rgba(27,67,50,0.07)', border: '1px solid rgba(27,67,50,0.15)', color: 'var(--color-text)' }}>
+                          <span>{def.emoji}</span>
+                          <span>{def.title}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
       </div>
