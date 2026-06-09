@@ -124,8 +124,9 @@ function AppShell() {
 }
 
 export default function App() {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={base}>
       <AuthProvider>
         <Routes>
           <Route path="/public/:leagueId" element={<PublicLeague />} />
